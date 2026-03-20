@@ -9,13 +9,13 @@ from .base import BaseEntity
 
 @dataclass(kw_only=True)
 class UserPermission(BaseEntity):
-    """Доменная сущность прав пользователя."""
+    """Domain-specific user rights."""
 
     user_id: uuid.UUID
     has_chat_access: bool = False
     granted_at: datetime | None = None
 
     def grant_chat_access(self, timestamp: datetime) -> None:
-        """Бизнес-метод для выдачи прав на чат."""
+        """Busines process for granting chat permissions."""
         self.has_chat_access = True
         self.granted_at = timestamp

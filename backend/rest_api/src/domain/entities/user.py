@@ -10,7 +10,7 @@ from .base import BaseEntity
 
 @dataclass(kw_only=True)
 class User(BaseEntity):
-    """Доменная сущность пользователя."""
+    """User domain entity."""
 
     email: str
     username: str
