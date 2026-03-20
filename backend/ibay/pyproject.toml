@@ -1,0 +1,28 @@
+[project]
+name = "ibay"
+version = "0.1.0"
+description = "iBay Marketplace Service"
+authors = [
+    {name = "Author"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "fastapi (>=0.135.1,<0.136.0)",
+    "uvicorn[standard] (>=0.42.0,<0.43.0)",
+    "pydantic-settings (>=2.13.1,<3.0.0)",
+    "sqlalchemy (>=2.0.48,<3.0.0)",
+    "asyncpg (>=0.31.0,<0.32.0)",
+    "alembic (>=1.18.4,<2.0.0)",
+    "faststream[rabbit] (>=0.6.7,<0.7.0)",
+    "aiohttp (>=3.13.3,<4.0.0)",
+    "boto3 (>=1.42.72,<2.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+package-mode = false
