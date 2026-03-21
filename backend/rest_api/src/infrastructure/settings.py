@@ -58,5 +58,20 @@ class AuthSettings(BaseSettings):
         return self.PUBLIC_KEY_PATH.read_text(encoding="utf-8")
 
 
+class MailSettings(BaseSettings):
+    """Mailjet configuration."""
+
+    MAILJET_API_KEY: str | None = None
+    MAILJET_API_SECRET: str | None = None
+    MAILJET_SENDER_EMAIL: str = "noreply@cryptowallet.com"
+    MAILJET_SENDER_NAME: str = "CryptoWallet Team"
+    FRONTEND_DASHBOARD_URL: str = "http://localhost:3000/dashboard"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 settings = DatabaseSettings()
 auth_settings = AuthSettings()
+mail_settings = MailSettings()
