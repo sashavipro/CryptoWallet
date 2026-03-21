@@ -72,6 +72,17 @@ class MailSettings(BaseSettings):
     )
 
 
+class SecuritySettings(BaseSettings):
+    """General security configuration."""
+
+    AES_SECRET_KEY: str
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
+security_settings = SecuritySettings()
