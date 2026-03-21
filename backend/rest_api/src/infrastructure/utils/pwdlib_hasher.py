@@ -1,7 +1,11 @@
 """rest_api/src/infrastructure/utils/pwdlib_hasher.py."""
 
+import logging
+
 from pwdlib import PasswordHash
 from pwdlib.hashers.argon2 import Argon2Hasher
+
+logger = logging.getLogger(__name__)
 
 
 class PwdlibHasher:
@@ -13,8 +17,13 @@ class PwdlibHasher:
 
     def hash(self, password: str) -> str:
         """Generate Argon2 hash."""
+        logger.debug("Generating password hash")
         return self._hasher.hash(password)
 
     def verify(self, password: str, hashed_password: str) -> bool:
         """Verify password against Argon2 hash."""
-        return self._hasher.verify(password, hashed_password)
+        logger.debug("Verifying password")
+        is_valid = self._hasher.verify(password, hashed_password)
+        if not is_valid:
+            logger.debug("Password verification failed")
+        return is_valid

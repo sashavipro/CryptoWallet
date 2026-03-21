@@ -1,6 +1,7 @@
 """rest_api/src/infrastructure/persistence/database/models/base.py."""
 
 import datetime
+import logging
 import re
 from typing import Annotated
 
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import declared_attr
 from sqlalchemy.orm import mapped_column
+
+logger = logging.getLogger(__name__)
 
 POSTGRES_INDEXES_NAMING_CONVENTION = {
     "ix": "%(column_0_label)s_idx",
@@ -50,4 +53,7 @@ class Base(AsyncAttrs, DeclarativeBase):
         if not snake_case_name.endswith("s"):
             snake_case_name += "s"
 
+        logger.debug(
+            "Generated table name '%s' for model '%s'", snake_case_name, cls.__name__
+        )
         return snake_case_name

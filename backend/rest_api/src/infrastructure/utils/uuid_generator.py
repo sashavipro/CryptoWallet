@@ -1,6 +1,9 @@
 """rest_api/src/infrastructure/utils/uuid_generator.py."""
 
+import logging
 import uuid
+
+logger = logging.getLogger(__name__)
 
 
 class UuidGenerator:
@@ -8,4 +11,6 @@ class UuidGenerator:
 
     def generate(self) -> uuid.UUID:
         """Generate a random UUID version 4."""
-        return uuid.uuid4()
+        new_uuid = uuid.uuid4()
+        logger.debug("Generated new UUID: %s", new_uuid)
+        return new_uuid

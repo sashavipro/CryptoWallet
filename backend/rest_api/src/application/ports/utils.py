@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 from typing import Protocol
 
 
@@ -42,4 +43,28 @@ class Encryptor(Protocol):
 
     def decrypt(self, encrypted_data: str) -> str:
         """Decrypt an encrypted string."""
+        ...
+
+
+class Logger(Protocol):
+    """Port for logging messages and exceptions."""
+
+    def info(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log a message with severity 'INFO'."""
+        ...
+
+    def error(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log a message with severity 'ERROR'."""
+        ...
+
+    def warning(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log a message with severity 'WARNING'."""
+        ...
+
+    def debug(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log a message with severity 'DEBUG'."""
+        ...
+
+    def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log a message with severity 'ERROR' along with exception information."""
         ...

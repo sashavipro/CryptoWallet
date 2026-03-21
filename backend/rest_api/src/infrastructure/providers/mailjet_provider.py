@@ -17,12 +17,10 @@ class MailjetProvider:
     async def send_welcome_email(self, to_email: str, username: str) -> None:
         """Send a welcome email to a newly registered user."""
         if not mail_settings.MAILJET_API_KEY or not mail_settings.MAILJET_API_SECRET:
-            logger.info(
-                "Mock Email sent to %s. Configure Mailjet keys.",
-                to_email,
-            )
+            logger.info("Mock Email sent to %s. Configure Mailjet keys.", to_email)
             return
 
+        logger.info("Sending welcome email to %s", to_email)
         url = "https://api.mailjet.com/v3.1/send"
 
         template_path = TEMPLATES_DIR / "welcome.html"
@@ -40,12 +38,7 @@ class MailjetProvider:
                         "Email": mail_settings.MAILJET_SENDER_EMAIL,
                         "Name": mail_settings.MAILJET_SENDER_NAME,
                     },
-                    "To": [
-                        {
-                            "Email": to_email,
-                            "Name": username,
-                        }
-                    ],
+                    "To": [{"Email": to_email, "Name": username}],
                     "Subject": "Welcome to CryptoWallet!",
                     "HTMLPart": html_part,
                 }
@@ -56,4 +49,13 @@ class MailjetProvider:
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, auth=auth)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+                logger.info("Successfully sent welcome email to %s", to_email)
+            except httpx.HTTPStatusError as e:
+                logger.exception(
+                    "Failed to send email to %s: HTTP %s",
+                    to_email,
+                    e.response.status_code,
+                )
+                raise
