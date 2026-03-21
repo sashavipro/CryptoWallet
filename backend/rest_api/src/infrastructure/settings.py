@@ -1,7 +1,12 @@
 """rest_api/src/infrastructure/settings.py."""
 
+import base64
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
+
+CERTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "certs"
 
 
 class DatabaseSettings(BaseSettings):
@@ -23,4 +28,35 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
+class AuthSettings(BaseSettings):
+    """Authentication configuration."""
+
+    PRIVATE_KEY_PATH: Path = CERTS_DIR / "private.pem"
+    PUBLIC_KEY_PATH: Path = CERTS_DIR / "public.pem"
+    ALGORITHM: str = "RS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+
+    JWT_PRIVATE_KEY_B64: str | None = None
+    JWT_PUBLIC_KEY_B64: str | None = None
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+    @property
+    def private_key(self) -> str:
+        """Read private RSA key from env (base64) or file."""
+        if self.JWT_PRIVATE_KEY_B64:
+            return base64.b64decode(self.JWT_PRIVATE_KEY_B64).decode("utf-8")
+        return self.PRIVATE_KEY_PATH.read_text(encoding="utf-8")
+
+    @property
+    def public_key(self) -> str:
+        """Read public RSA key from env (base64) or file."""
+        if self.JWT_PUBLIC_KEY_B64:
+            return base64.b64decode(self.JWT_PUBLIC_KEY_B64).decode("utf-8")
+        return self.PUBLIC_KEY_PATH.read_text(encoding="utf-8")
+
+
 settings = DatabaseSettings()
+auth_settings = AuthSettings()

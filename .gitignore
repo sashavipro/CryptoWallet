@@ -218,3 +218,4 @@ __marimo__/
 
 
 test_script/
+backend/rest_api/certs/private.pem
