@@ -2,9 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Crypto Wallet</title>
+    <link rel="stylesheet" href="/static/css/auth.css">
 </head>
 <body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <h2>Register</h2>
+            <form id="registerForm">
+                <div class="form-group">
+                    <input type="email" id="email" placeholder="Email" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="username" placeholder="Username" required minlength="3" maxlength="50">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="password" placeholder="Password" required minlength="8" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="repeatPassword" placeholder="Repeat" required minlength="8" maxlength="20">
+                </div>
+                <div id="errorMessage" style="color: red; font-size: 12px; margin-bottom: 10px; display: none;"></div>
+                <button type="submit" class="btn-submit">Register</button>
+            </form>
+        </div>
+    </div>
 
+    <script src="/static/js/register.js"></script>
 </body>
 </html>

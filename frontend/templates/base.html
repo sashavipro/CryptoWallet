@@ -2,9 +2,45 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Crypto Wallet{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                CRYPTO WALLET
+            </div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="/profile" class="{% if request.path == '/profile' %}active{% endif %}">Профиль</a></li>
+                    <li><a href="/wallets" class="{% if request.path == '/wallets' %}active{% endif %}">Кошельки</a></li>
+                    <li><a href="/ibay" class="{% if request.path == '/ibay' %}active{% endif %}">iBay</a></li>
+                    <li><a href="/chat" class="{% if request.path == '/chat' %}active{% endif %}">Чат</a></li>
+                </ul>
+            </nav>
+        </aside>
 
+        <div class="main-wrapper">
+            <header class="header">
+                <div class="user-info">
+                    <span class="username">{{ current_user.username | default('Selina Kyle') }}</span>
+                    <div class="avatar-placeholder">
+                        <img src="/static/img/default-avatar.png" alt="Avatar">
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                {% block content %}
+                {% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
