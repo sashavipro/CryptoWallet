@@ -11,12 +11,12 @@ from src.application.ports.providers import MailProvider
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
-from src.domain.entities.permissions import UserPermission
-from src.domain.entities.user import User
-from src.domain.value_objects.user.email import Email
-from src.domain.value_objects.user.password import PasswordHash
-from src.domain.value_objects.user.password import RawPassword
-from src.domain.value_objects.user.username import Username
+from src.domain.entities import User
+from src.domain.entities import UserPermission
+from src.domain.value_objects.user import Email
+from src.domain.value_objects.user import PasswordHash
+from src.domain.value_objects.user import RawPassword
+from src.domain.value_objects.user import Username
 
 logger = logging.getLogger(__name__)
 

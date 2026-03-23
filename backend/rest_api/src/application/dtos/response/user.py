@@ -35,3 +35,10 @@ class PublicProfileResponse(BaseModel):
     avatar_url: str | None = Field(None, description="URL to the user's avatar")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserStatsResponse(BaseModel):
+    """DTO for user statistics."""
+
+    total_messages: int = Field(..., description="Total messages sent in global chat")
+    wallets_count: int = Field(..., description="Number of active wallets")

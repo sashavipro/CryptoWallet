@@ -7,8 +7,8 @@ from src.application.dtos.response import TokenResponse
 from src.application.ports.gateways import UserGateway
 from src.application.ports.providers import JwtProvider
 from src.application.ports.utils import PasswordHasher
-from src.domain.value_objects.user.email import Email
-from src.domain.value_objects.user.password import RawPassword
+from src.domain.value_objects.user import Email
+from src.domain.value_objects.user import RawPassword
 
 logger = logging.getLogger(__name__)
 
