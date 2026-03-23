@@ -7,7 +7,9 @@ from dishka.integrations.fastapi import FromDishka
 from fastapi import APIRouter
 from fastapi import Depends
 
+from src.application.dtos.request import ChangePasswordRequest
 from src.application.dtos.response import UserResponse
+from src.application.interactors.profile import ChangePasswordInteractor
 from src.application.interactors.profile import GetUserInteractor
 from src.presentation.http.dependencies.auth import get_current_user_id
 
@@ -23,3 +25,13 @@ async def get_current_user_profile(
 ) -> UserResponse:
     """Get the profile of the currently logged-in user."""
     return await interactor(user_id)
+
+
+@router.put("/password", response_model=UserResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    user_id: CurrentUserId,
+    interactor: FromDishka[ChangePasswordInteractor],
+) -> UserResponse:
+    """Update the user's password."""
+    return await interactor(user_id, request)

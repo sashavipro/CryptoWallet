@@ -2,26 +2,33 @@
 
 import uuid
 
+from src.application.dtos.request import ChangePasswordRequest
 from src.application.dtos.request import UpdateUserRequest
 from src.application.dtos.response import PublicProfileResponse
 from src.application.dtos.response import UserResponse
+from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.providers import FileUploader
+from src.application.ports.utils import PasswordHasher
+from src.domain.exceptions import InvalidCredentialsException
+from src.domain.exceptions import UserNotFoundException
 from src.domain.value_objects.user import Username
+from src.domain.value_objects.user.password import PasswordHash
+from src.domain.value_objects.user.password import RawPassword
 
 
 class GetUserInteractor:
     """Use Case for retrieving the current user's profile."""
 
     def __init__(self, user_gateway: UserGateway) -> None:
-        """Initialize with user gateway."""
+        """Initialize the interactor with a user gateway."""
         self.user_gateway = user_gateway
 
     async def __call__(self, user_id: uuid.UUID) -> UserResponse:
-        """Execute retrieval."""
+        """Execute the retrieval of the current user's profile."""
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
-            raise ValueError("User not found")  # noqa: TRY003, EM101
+            raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
         return UserResponse.model_validate(user)
 
 
@@ -29,31 +36,32 @@ class GetOtherProfileInteractor:
     """Use Case for retrieving another user's public profile."""
 
     def __init__(self, user_gateway: UserGateway) -> None:
-        """Initialize with user gateway."""
+        """Initialize the interactor with a user gateway."""
         self.user_gateway = user_gateway
 
     async def __call__(self, user_id: uuid.UUID) -> PublicProfileResponse:
-        """Execute retrieval of public data."""
+        """Execute the retrieval of another user's public profile."""
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
-            raise ValueError("User not found")  # noqa: TRY003, EM101
+            raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
         return PublicProfileResponse.model_validate(user)
 
 
 class UpdateUserInteractor:
     """Use Case for updating user profile fields."""
 
-    def __init__(self, user_gateway: UserGateway) -> None:
-        """Initialize with user gateway."""
+    def __init__(self, user_gateway: UserGateway, uow: UnitOfWork) -> None:
+        """Initialize the interactor with user gateway and unit of work."""
         self.user_gateway = user_gateway
+        self.uow = uow
 
     async def __call__(
         self, user_id: uuid.UUID, request: UpdateUserRequest
     ) -> UserResponse:
-        """Execute profile update."""
+        """Execute the update of user profile fields."""
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
-            raise ValueError("User not found")  # noqa: TRY003, EM101
+            raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
 
         if request.username is not None:
             username_vo = Username(request.username)
@@ -63,26 +71,74 @@ class UpdateUserInteractor:
             user.avatar_url = request.avatar_url
 
         updated_user = await self.user_gateway.update_user(user)
+
+        await self.uow.commit()
         return UserResponse.model_validate(updated_user)
 
 
 class DeleteAvatarInteractor:
     """Use Case for removing a user's avatar."""
 
-    def __init__(self, user_gateway: UserGateway, file_uploader: FileUploader) -> None:
-        """Initialize with gateway and uploader provider."""
+    def __init__(
+        self, user_gateway: UserGateway, file_uploader: FileUploader, uow: UnitOfWork
+    ) -> None:
+        """Initialize the interactor with required dependencies."""
         self.user_gateway = user_gateway
         self.file_uploader = file_uploader
+        self.uow = uow
 
     async def __call__(self, user_id: uuid.UUID) -> UserResponse:
-        """Execute avatar deletion."""
+        """Execute the avatar deletion process."""
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
-            raise ValueError("User not found")  # noqa: TRY003, EM101
+            raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
 
         if user.avatar_url:
             await self.file_uploader.delete_avatar(user.avatar_url)
             user.avatar_url = None
             user = await self.user_gateway.update_user(user)
 
+            await self.uow.commit()
+
         return UserResponse.model_validate(user)
+
+
+class ChangePasswordInteractor:
+    """Use Case for changing the user's password."""
+
+    def __init__(
+        self,
+        user_gateway: UserGateway,
+        password_hasher: PasswordHasher,
+        uow: UnitOfWork,
+    ) -> None:
+        """Initialize the interactor with required gateways and utilities."""
+        self.user_gateway = user_gateway
+        self.password_hasher = password_hasher
+        self.uow = uow
+
+    async def __call__(
+        self, user_id: uuid.UUID, request: ChangePasswordRequest
+    ) -> UserResponse:
+        """Execute the password change process."""
+        user = await self.user_gateway.get_user_by_id(user_id)
+        if not user:
+            raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
+
+        is_valid = self.password_hasher.verify(
+            password=request.old_password,
+            hashed_password=user.password_hash,
+        )
+        if not is_valid:
+            raise InvalidCredentialsException("Invalid old password")  # noqa: TRY003, EM101
+
+        raw_password_vo = RawPassword(request.new_password)
+        new_hash = self.password_hasher.hash(raw_password_vo.value)
+        password_hash_vo = PasswordHash(new_hash)
+
+        user.password_hash = password_hash_vo.value
+        updated_user = await self.user_gateway.update_user(user)
+
+        await self.uow.commit()
+
+        return UserResponse.model_validate(updated_user)

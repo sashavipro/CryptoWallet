@@ -63,3 +63,18 @@ class UpdateUserRequest(BaseModel):
         None,
         description="URL to the new avatar image",
     )
+
+
+class ChangePasswordRequest(BaseModel):
+    """DTO for changing user password."""
+
+    old_password: str = Field(
+        ...,
+        description="Current raw password",
+    )
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=20,
+        description="New raw password",
+    )

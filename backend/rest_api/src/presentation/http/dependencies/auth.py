@@ -6,6 +6,7 @@ from typing import Annotated
 from dishka.integrations.fastapi import FromDishka
 from fastapi import Depends
 from fastapi import HTTPException
+from fastapi import Request
 from fastapi import status
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.security import HTTPBearer
@@ -16,14 +17,22 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_user_id(
-    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    request: Request,
     jwt_provider: FromDishka[JwtProvider],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ] = None,
 ) -> uuid.UUID:
-    """Retrieve and validate JWT tokens from the request.
+    """Retrieve and validate JWT tokens from Authorization header or cookies.
 
     Returns the current user's UUID.
     """
-    if not credentials:
+    token = credentials.credentials if credentials else None
+
+    if not token:
+        token = request.cookies.get("access_token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials were not provided.",
@@ -31,7 +40,7 @@ async def get_current_user_id(
         )
 
     try:
-        payload = jwt_provider.verify(credentials.credentials)
+        payload = jwt_provider.verify(token)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -42,10 +51,9 @@ async def get_current_user_id(
     user_id_str = payload.get("sub")
 
     if not user_id_str:
-        msg = "Token payload missing 'sub' (user ID)"
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=msg,
+            detail="Token payload missing 'sub' (user ID)",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
