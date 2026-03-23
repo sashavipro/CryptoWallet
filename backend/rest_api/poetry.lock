@@ -203,6 +203,24 @@ frozenlist = ">=1.1.0"
 typing-extensions = {version = ">=4.2", markers = "python_version < \"3.13\""}
 
 [[package]]
+name = "aiostream"
+version = "0.7.1"
+description = "Generator-based operators for asynchronous iteration"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "aiostream-0.7.1-py3-none-any.whl", hash = "sha256:ea8739e9158ee6a606b3feedf3762721c3507344e540d09a10984c5e88a13b37"},
+    {file = "aiostream-0.7.1.tar.gz", hash = "sha256:272aaa0d8f83beb906f5aa9022bb59046bb7a103fa3770f807c31f918595acf6"},
+]
+
+[package.dependencies]
+typing-extensions = "*"
+
+[package.extras]
+dev = ["pytest", "pytest-asyncio", "pytest-cov"]
+
+[[package]]
 name = "alembic"
 version = "1.18.4"
 description = "A database migration tool for SQLAlchemy."
@@ -2093,6 +2111,23 @@ uv = ["uvloop (>=0.16.0,<1) ; sys_platform != \"win32\""]
 zmq = ["pyzmq (>=26)"]
 
 [[package]]
+name = "taskiq-aio-pika"
+version = "0.6.0"
+description = "RabbitMQ broker for taskiq"
+optional = false
+python-versions = "<4,>=3.10"
+groups = ["main"]
+files = [
+    {file = "taskiq_aio_pika-0.6.0-py3-none-any.whl", hash = "sha256:6bff38b61b24afd7d41b78ea9ffca0702fe9653e82289ca1287b063a53af2145"},
+    {file = "taskiq_aio_pika-0.6.0.tar.gz", hash = "sha256:0a4ec304a5e860e205aaea5077d90d2a009a4842f3ee008b5185c29301992ed9"},
+]
+
+[package.dependencies]
+aio-pika = ">=9.0.0"
+aiostream = ">=0.7.1"
+taskiq = ">=0.12.0,<1"
+
+[[package]]
 name = "taskiq-dependencies"
 version = "1.5.7"
 description = "FastAPI like dependency injection implementation"
@@ -2595,4 +2630,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "f7bc88f264d2403f93383d452d77e870802ec87763c88c42b3abef198d77ee27"
+content-hash = "94e6bc523dd46c29cd1107585cd48bf29fcf09ec8385da41b75f3df3061f3909"

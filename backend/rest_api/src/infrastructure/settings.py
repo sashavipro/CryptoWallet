@@ -82,7 +82,29 @@ class SecuritySettings(BaseSettings):
     )
 
 
+class RabbitMQSettings(BaseSettings):
+    """RabbitMQ configuration."""
+
+    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+class RedisSettings(BaseSettings):
+    """Redis configuration."""
+
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
 security_settings = SecuritySettings()
+mq_settings = RabbitMQSettings()
+redis_settings = RedisSettings()
