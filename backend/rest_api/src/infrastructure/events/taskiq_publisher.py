@@ -9,6 +9,8 @@ from src.infrastructure.message_broker.tasks import handle_user_registered_event
 class TaskiqEventPublisher(EventPublisher):
     """Implementation of EventPublisher using TaskIQ and RabbitMQ."""
 
-    async def publish_user_registered(self, user_id: uuid.UUID, email: str) -> None:
+    async def publish_user_registered(
+        self, user_id: uuid.UUID, email: str, username: str
+    ) -> None:
         """Publish a user registration event to the message broker."""
-        await handle_user_registered_event.kiq(str(user_id), email)
+        await handle_user_registered_event.kiq(str(user_id), email, username)

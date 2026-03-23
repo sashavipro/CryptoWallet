@@ -3,12 +3,19 @@
 import logging
 
 from src.infrastructure.message_broker.broker import broker
+from src.infrastructure.providers.mailjet_provider import MailjetProvider
 
 logger = logging.getLogger(__name__)
 
 
 @broker.task(task_name="user_events.registered")
-async def handle_user_registered_event(user_id: str, email: str) -> None:
-    """Task runner for handling user registration events."""
+async def handle_user_registered_event(user_id: str, email: str, username: str) -> None:
+    """Workflow for processing a successful registration."""
     logger.info("Event received - User registered: %s (Email: %s)", user_id, email)
-    # тут мб логика обработки события на стороне подписчика
+
+    mail_provider = MailjetProvider()
+    try:
+        await mail_provider.send_welcome_email(to_email=email, username=username)
+        logger.info("Welcome email sent asynchronously to user ID: %s", user_id)
+    except Exception:
+        logger.exception("Background task failed to send welcome email to %s", email)

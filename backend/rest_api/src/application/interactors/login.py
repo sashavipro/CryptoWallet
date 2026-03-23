@@ -8,6 +8,7 @@ from src.application.dtos.response import TokenResponse
 from src.application.ports.gateways import UserGateway
 from src.application.ports.providers import JwtProvider
 from src.application.ports.utils import PasswordHasher
+from src.domain.exceptions import InvalidCredentialsException
 from src.domain.value_objects.user import Email
 from src.domain.value_objects.user import RawPassword
 
@@ -38,7 +39,7 @@ class LoginUserInteractor:
         user = await self.user_gateway.get_user_by_email(email_vo.value)
         if not user:
             logger.warning("Login failed: User not found for email %s", request.email)
-            raise ValueError("Invalid email or password")  # noqa: TRY003, EM101
+            raise InvalidCredentialsException("Invalid email or password")  # noqa: TRY003, EM101
 
         is_valid = self.password_hasher.verify(
             password=raw_password_vo.value,
@@ -46,12 +47,12 @@ class LoginUserInteractor:
         )
         if not is_valid:
             logger.warning("Login failed: Invalid password for email %s", request.email)
-            raise ValueError("Invalid email or password")  # noqa: TRY003, EM101
+            raise InvalidCredentialsException("Invalid email or password")  # noqa: TRY003, EM101
 
         payload = {"sub": str(user.id)}
 
         if request.remember_me:
-            expires_delta = timedelta(days=3650)
+            expires_delta = timedelta(days=30)
         else:
             expires_delta = timedelta(seconds=15)
 
