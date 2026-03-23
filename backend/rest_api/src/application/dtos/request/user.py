@@ -41,6 +41,9 @@ class LoginUserRequest(BaseModel):
         description="Raw password",
         examples=["SuperSecret123!"],
     )
+    remember_me: bool = Field(
+        default=False, description="Flag for long-lived session (eternal vs 15 seconds)"
+    )
 
 
 class UpdateUserRequest(BaseModel):

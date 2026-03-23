@@ -1,6 +1,7 @@
 """rest_api/src/application/interactors/login.py."""
 
 import logging
+from datetime import timedelta
 
 from src.application.dtos.request import LoginUserRequest
 from src.application.dtos.response import TokenResponse
@@ -48,7 +49,13 @@ class LoginUserInteractor:
             raise ValueError("Invalid email or password")  # noqa: TRY003, EM101
 
         payload = {"sub": str(user.id)}
-        token = self.jwt_provider.sign(payload)
+
+        if request.remember_me:
+            expires_delta = timedelta(days=3650)
+        else:
+            expires_delta = timedelta(seconds=15)
+
+        token = self.jwt_provider.sign(payload, expires_delta=expires_delta)
 
         logger.info("User %s logged in successfully", user.id)
         return TokenResponse(access_token=token, token_type="bearer")  # noqa: S106
