@@ -2,14 +2,20 @@
 
 from dishka.integrations.fastapi import FromDishka
 from fastapi import APIRouter
+from fastapi import Depends
 
 from src.application.dtos.request import LoginUserRequest
 from src.application.dtos.request import RegisterUserRequest
 from src.application.dtos.response import TokenResponse
 from src.application.interactors import LoginUserInteractor
 from src.application.interactors import RegisterUserInteractor
+from src.presentation.http.dependencies.rate_limit import check_rate_limit
 
-router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+router = APIRouter(
+    prefix="/api/v1/auth",
+    tags=["auth"],
+    dependencies=[Depends(check_rate_limit)],
+)
 
 
 @router.post("/login", response_model=TokenResponse)

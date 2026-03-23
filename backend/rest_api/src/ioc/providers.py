@@ -5,6 +5,7 @@ from collections.abc import AsyncIterable
 from dishka import Provider
 from dishka import Scope
 from dishka import provide
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -26,6 +27,7 @@ from src.application.ports.providers import JwtProvider as JwtProviderPort
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
+from src.infrastructure.cache.rate_limiter import RedisRateLimiter
 from src.infrastructure.events.taskiq_publisher import TaskiqEventPublisher
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
@@ -35,6 +37,7 @@ from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
 from src.infrastructure.providers.jwt_provider import JwtProvider as JwtProviderImpl
+from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import settings
 from src.infrastructure.utils.datetime_generator import DatetimeGenerator
 from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
@@ -56,6 +59,27 @@ class InfrastructureProvider(Provider):
     event_publisher = provide(
         TaskiqEventPublisher, scope=Scope.APP, provides=EventPublisher
     )
+
+    @provide(scope=Scope.APP)
+    async def provide_redis(self) -> AsyncIterable[Redis]:
+        """Provide a Redis client instance."""
+        client = Redis.from_url(redis_settings.REDIS_URL, decode_responses=True)
+        yield client
+        await client.aclose()
+
+    @provide(scope=Scope.APP)
+    def provide_rate_limiter(self, redis_client: Redis) -> RedisRateLimiter:
+        """Provide the Redis-based rate limiter.
+
+        Using stricter rules for auth endpoints
+        (e.g., 5 requests per minute, ban for 5 min).
+        """
+        return RedisRateLimiter(
+            redis_client=redis_client,
+            max_requests=5,
+            window_seconds=60,
+            ban_seconds=300,
+        )
 
 
 class DbProvider(Provider):
