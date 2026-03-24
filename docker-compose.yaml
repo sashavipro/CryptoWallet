@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     container_name: crypto_postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-crypto_wallet}
     ports:
       - "5433:5432"
     volumes:
@@ -18,8 +18,8 @@ services:
     image: mongo:7
     container_name: crypto_mongo
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-password}
     ports:
       - "27017:27017"
     volumes:
@@ -39,14 +39,62 @@ services:
     image: rabbitmq:3-management-alpine
     container_name: crypto_rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:-guest}
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672" # Веб-интерфейс RabbitMQ
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
+
+  # --- НАШИ ПАЙТОН СЕРВИСЫ ---
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_api
+    # Горячая перезагрузка кода (--reload), чтобы не пересобирать докер при правках
+    command: uvicorn src.presentation.http.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      # Прокидываем весь проект внутрь
+      - .:/app
+    env_file:
+      - backend/rest_api/.env
+    environment:
+      # Жестко переопределяем пути, чтобы они смотрели во внутреннюю сеть Docker
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crypto_worker
+    # Запуск воркера TaskIQ
+    command: taskiq worker src.infrastructure.message_broker.broker:broker src.infrastructure.message_broker.tasks
+    volumes:
+      - .:/app
+    env_file:
+      - backend/rest_api/.env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
+    depends_on:
+      - rabbitmq
+      - postgres
+      - redis
 
 volumes:
   postgres_data:

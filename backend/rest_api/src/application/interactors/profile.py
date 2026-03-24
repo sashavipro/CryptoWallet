@@ -9,6 +9,7 @@ from src.application.dtos.response import UserResponse
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.providers import FileUploader
+from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.domain.exceptions import InvalidCredentialsException
 from src.domain.exceptions import UserNotFoundException
@@ -70,9 +71,9 @@ class UpdateUserInteractor:
         if request.avatar_url is not None:
             user.avatar_url = request.avatar_url
 
-        updated_user = await self.user_gateway.update_user(user)
+        async with self.uow:
+            updated_user = await self.user_gateway.update_user(user)
 
-        await self.uow.commit()
         return UserResponse.model_validate(updated_user)
 
 
@@ -96,9 +97,9 @@ class DeleteAvatarInteractor:
         if user.avatar_url:
             await self.file_uploader.delete_avatar(user.avatar_url)
             user.avatar_url = None
-            user = await self.user_gateway.update_user(user)
 
-            await self.uow.commit()
+            async with self.uow:
+                user = await self.user_gateway.update_user(user)
 
         return UserResponse.model_validate(user)
 
@@ -137,8 +138,27 @@ class ChangePasswordInteractor:
         password_hash_vo = PasswordHash(new_hash)
 
         user.password_hash = password_hash_vo.value
-        updated_user = await self.user_gateway.update_user(user)
 
-        await self.uow.commit()
+        async with self.uow:
+            updated_user = await self.user_gateway.update_user(user)
 
         return UserResponse.model_validate(updated_user)
+
+
+class GenerateAvatarUploadUrlInteractor:
+    """Use Case for generating a presigned S3 upload URL for an avatar."""
+
+    def __init__(self, file_uploader: FileUploader, id_generator: IdGenerator):
+        """Initialize the interactor with a file uploader and ID generator."""
+        self.file_uploader = file_uploader
+        self.id_generator = id_generator
+
+    async def __call__(
+        self, user_id: uuid.UUID, extension: str, content_type: str
+    ) -> dict:
+        """Execute the generation of a secure, temporary upload link."""
+        file_name = f"avatars/{user_id}/{self.id_generator.generate()}.{extension}"
+
+        return await self.file_uploader.generate_presigned_upload_url(
+            file_name=file_name, content_type=content_type
+        )

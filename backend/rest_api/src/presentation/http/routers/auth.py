@@ -1,6 +1,7 @@
 """rest_api/src/presentation/http/routers/auth.py."""
 
 from dishka.integrations.fastapi import FromDishka
+from dishka.integrations.fastapi import inject
 from fastapi import APIRouter
 from fastapi import Depends
 
@@ -19,6 +20,7 @@ router = APIRouter(
 
 
 @router.post("/login", response_model=TokenResponse)
+@inject
 async def login(
     request: LoginUserRequest,
     interactor: FromDishka[LoginUserInteractor],
@@ -28,6 +30,7 @@ async def login(
 
 
 @router.post("/register", response_model=TokenResponse)
+@inject
 async def register(
     request: RegisterUserRequest,
     interactor: FromDishka[RegisterUserInteractor],

@@ -1,8 +1,11 @@
 """rest_api/src/presentation/http/main.py."""
 
+from pathlib import Path
+
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.domain.exceptions import DomainException
@@ -13,15 +16,24 @@ from src.presentation.http.exception_handlers import http_exception_handler
 from src.presentation.http.exception_handlers import validation_exception_handler
 from src.presentation.http.exception_handlers import value_error_handler
 from src.presentation.http.routers.auth import router as auth_router
+from src.presentation.http.routers.pages import router as pages_router
 from src.presentation.http.routers.profile import router as profile_router
 
 setup_logging()
+
+# Вычисляем путь до папки frontend/static
+# main.py -> http -> presentation -> src -> rest_api -> backend -> CryptoWallet
+PROJECT_ROOT = Path(__file__).resolve().parents[5]
+STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(title="CryptoWallet API", version="1.0.0")
 
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+    app.include_router(pages_router)
     app.include_router(auth_router)
     app.include_router(profile_router)
 

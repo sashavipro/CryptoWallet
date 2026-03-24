@@ -23,12 +23,15 @@ from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import PermissionGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
+from src.application.ports.gateways.stats import StatsGateway
 from src.application.ports.providers import JwtProvider as JwtProviderPort
+from src.application.ports.providers.file_provider import FileUploader
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
 from src.infrastructure.cache.rate_limiter import RedisRateLimiter
 from src.infrastructure.events.taskiq_publisher import TaskiqEventPublisher
+from src.infrastructure.persistence.cache.stats import RedisStatsGateway
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
@@ -37,6 +40,7 @@ from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
 from src.infrastructure.providers.jwt_provider import JwtProvider as JwtProviderImpl
+from src.infrastructure.providers.s3_file_uploader import S3FileUploader
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import settings
 from src.infrastructure.utils.datetime_generator import DatetimeGenerator
@@ -59,6 +63,9 @@ class InfrastructureProvider(Provider):
     event_publisher = provide(
         TaskiqEventPublisher, scope=Scope.APP, provides=EventPublisher
     )
+    stats_gateway = provide(
+        RedisStatsGateway, scope=Scope.REQUEST, provides=StatsGateway
+    )
 
     @provide(scope=Scope.APP)
     async def provide_redis(self) -> AsyncIterable[Redis]:
@@ -80,6 +87,11 @@ class InfrastructureProvider(Provider):
             window_seconds=60,
             ban_seconds=300,
         )
+
+    @provide(scope=Scope.APP)
+    def provide_file_uploader(self) -> FileUploader:
+        """Provide S3 file uploader implementation."""
+        return S3FileUploader()
 
 
 class DbProvider(Provider):

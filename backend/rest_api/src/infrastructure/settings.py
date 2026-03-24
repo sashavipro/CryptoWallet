@@ -102,9 +102,27 @@ class RedisSettings(BaseSettings):
     )
 
 
+class S3Settings(BaseSettings):
+    """S3 Storage configuration (AWS S3, MinIO, DigitalOcean Spaces, etc.)."""
+
+    S3_ENDPOINT_URL: str | None = None  # Например: https://fra1.digitaloceanspaces.com
+    S3_REGION_NAME: str = "us-east-1"
+    S3_ACCESS_KEY_ID: str
+    S3_SECRET_ACCESS_KEY: str
+    S3_BUCKET_NAME: str
+    S3_PUBLIC_URL: str | None = (
+        None  # Базовый URL для чтения файлов (если отличается от Endpoint)
+    )
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
 security_settings = SecuritySettings()
 mq_settings = RabbitMQSettings()
 redis_settings = RedisSettings()
+s3_settings = S3Settings()

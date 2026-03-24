@@ -75,17 +75,17 @@ class RegisterUserInteractor:
             created_at=current_time,
         )
 
-        saved_user = await self.user_gateway.add_user(user)
+        async with self.uow:
+            saved_user = await self.user_gateway.add_user(user)
 
-        permission = UserPermission(
-            id=self.id_generator.generate(),
-            user_id=saved_user.id,
-            has_chat_access=True,
-            granted_at=current_time,
-        )
-        await self.permission_gateway.add_permission(permission)
+            permission = UserPermission(
+                id=self.id_generator.generate(),
+                user_id=saved_user.id,
+                has_chat_access=True,
+                granted_at=current_time,
+            )
+            await self.permission_gateway.add_permission(permission)
 
-        await self.uow.commit()
         logger.info("User registered and transaction committed: %s", saved_user.id)
 
         await self.event_publisher.publish_user_registered(

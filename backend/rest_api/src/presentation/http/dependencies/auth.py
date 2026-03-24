@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated
 
 from dishka.integrations.fastapi import FromDishka
+from dishka.integrations.fastapi import inject
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Request
@@ -16,6 +17,7 @@ from src.application.ports.providers import JwtProvider
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+@inject
 async def get_current_user_id(
     request: Request,
     jwt_provider: FromDishka[JwtProvider],

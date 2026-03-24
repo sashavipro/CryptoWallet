@@ -1,6 +1,7 @@
 """rest_api/src/presentation/http/dependencies/rate_limit.py."""
 
 from dishka.integrations.fastapi import FromDishka
+from dishka.integrations.fastapi import inject
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
@@ -8,6 +9,7 @@ from fastapi import status
 from src.infrastructure.cache.rate_limiter import RedisRateLimiter
 
 
+@inject
 async def check_rate_limit(
     request: Request,
     rate_limiter: FromDishka[RedisRateLimiter],
