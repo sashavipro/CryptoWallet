@@ -30,8 +30,8 @@ from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
 from src.infrastructure.cache.rate_limiter import RedisRateLimiter
+from src.infrastructure.cache.stats import RedisStatsGateway
 from src.infrastructure.events.taskiq_publisher import TaskiqEventPublisher
-from src.infrastructure.persistence.cache.stats import RedisStatsGateway
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )

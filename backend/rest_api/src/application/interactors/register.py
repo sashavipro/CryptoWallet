@@ -81,16 +81,24 @@ class RegisterUserInteractor:
             permission = UserPermission(
                 id=self.id_generator.generate(),
                 user_id=saved_user.id,
-                has_chat_access=True,
-                granted_at=current_time,
+                has_chat_access=False,
+                granted_at=None,
             )
             await self.permission_gateway.add_permission(permission)
 
-        logger.info("User registered and transaction committed: %s", saved_user.id)
+            await self.event_publisher.publish_user_registered(
+                user_id=saved_user.id,
+                email=saved_user.email,
+                username=saved_user.username,
+            )
 
-        await self.event_publisher.publish_user_registered(
-            user_id=saved_user.id, email=saved_user.email, username=saved_user.username
+        # Как только мы вышли из блока `async with self.uow` без ошибок,
+        # SqlaUnitOfWork делает await self.session.commit()
+
+        logger.info(
+            "User registered, event published, and transaction committed: %s",
+            saved_user.id,
         )
 
         token = self.jwt_provider.sign({"sub": str(saved_user.id)})
-        return TokenResponse(access_token=token, token_type="bearer")  # noqa: S106
+        return TokenResponse(access_token=token)

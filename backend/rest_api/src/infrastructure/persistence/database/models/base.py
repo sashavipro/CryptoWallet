@@ -5,6 +5,7 @@ import logging
 import re
 from typing import Annotated
 
+from sqlalchemy import DateTime
 from sqlalchemy import MetaData
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncAttrs
@@ -27,13 +28,15 @@ IntPK = Annotated[int, mapped_column(primary_key=True)]
 CreatedAt = Annotated[
     datetime.datetime,
     # pylint: disable=not-callable
-    mapped_column(server_default=func.now()),
+    mapped_column(DateTime(timezone=True), server_default=func.now()),
 ]
 
 UpdatedAt = Annotated[
     datetime.datetime,
     # pylint: disable=not-callable
-    mapped_column(server_default=func.now(), onupdate=func.now()),
+    mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    ),
 ]
 
 

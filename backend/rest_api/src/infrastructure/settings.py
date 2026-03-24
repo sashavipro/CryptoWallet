@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
-CERTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "certs"
+CERTS_DIR = Path(__file__).resolve().parent.parent.parent / "certs"
 
 
 class DatabaseSettings(BaseSettings):

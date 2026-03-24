@@ -10,6 +10,7 @@ from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.utils import PasswordHasher
 from src.domain.entities import User
+from src.domain.value_objects.user import RawPassword
 from src.ioc.container import create_container
 
 logging.basicConfig(level=logging.INFO)
@@ -24,7 +25,7 @@ def cli():
 @cli.command()
 @click.option("--email", default="admin@admin.com", help="Superuser email")
 @click.option("--username", default="admin", help="Superuser username")
-@click.option("--password", default="admin12345", help="Superuser password")
+@click.option("--password", default="Admin12345", help="Superuser password")
 def create_superuser(email, username, password):
     """Create a default superuser (or administrator)."""
 
@@ -45,7 +46,8 @@ def create_superuser(email, username, password):
             click.echo(f"Creating superuser {username} ({email})...")
 
             try:
-                hashed_password = password_hasher.hash(password)
+                valid_password = RawPassword(password)
+                hashed_password = password_hasher.hash(valid_password.value)
 
                 new_user = User(
                     id=uuid.uuid4(),

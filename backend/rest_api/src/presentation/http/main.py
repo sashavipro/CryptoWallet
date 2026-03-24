@@ -1,5 +1,6 @@
 """rest_api/src/presentation/http/main.py."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dishka.integrations.fastapi import setup_dishka
@@ -10,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.domain.exceptions import DomainException
 from src.infrastructure.log_config import setup_logging
+from src.infrastructure.message_broker.broker import broker
 from src.ioc.container import create_container
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
@@ -27,9 +29,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[5]
 STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage the application lifespan, including background connections."""
+    await broker.startup()
+    yield
+    await broker.shutdown()
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="CryptoWallet API", version="1.0.0")
+    app = FastAPI(title="CryptoWallet API", version="1.0.0", lifespan=lifespan)
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
