@@ -26,9 +26,9 @@
         <div class="main-wrapper">
             <header class="header">
                 <div class="user-info">
-                    <span class="username">{{ current_user.username | default('Selina Kyle') }}</span>
+                    <span class="username" id="navUsername">Loading...</span>
                     <div class="avatar-placeholder">
-                        <img src="/static/img/default-avatar.png" alt="Avatar">
+                        <img id="navAvatar" src="/static/img/default-avatar.png" alt="Avatar">
                     </div>
                     <button id="logoutBtn" style="margin-left: 15px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer;">Выйти</button>
                 </div>

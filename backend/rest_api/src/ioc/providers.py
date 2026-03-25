@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.application.interactors.login import LoginUserInteractor
+from src.application.interactors.profile import ChangePasswordInteractor
 from src.application.interactors.profile import DeleteAvatarInteractor
+from src.application.interactors.profile import GenerateAvatarUploadUrlInteractor
 from src.application.interactors.profile import GetOtherProfileInteractor
 from src.application.interactors.profile import GetUserInteractor
 from src.application.interactors.profile import UpdateUserInteractor
@@ -138,6 +140,10 @@ class InteractorProvider(Provider):
         GetOtherProfileInteractor, scope=Scope.REQUEST
     )
     delete_avatar_interactor = provide(DeleteAvatarInteractor, scope=Scope.REQUEST)
+    change_password_interactor = provide(ChangePasswordInteractor, scope=Scope.REQUEST)
+    generate_avatar_upload_url_interactor = provide(
+        GenerateAvatarUploadUrlInteractor, scope=Scope.REQUEST
+    )
 
     # Stats
     get_stats_interactor = provide(GetStatsInteractor, scope=Scope.REQUEST)

@@ -20,3 +20,7 @@ class UserGateway(Protocol):
     async def get_user_by_email(self, email: str) -> User | None:
         """Retrieve a user by their email address."""
         ...
+
+    async def update_user(self, user: User) -> User:
+        """Update an existing user in the database."""
+        ...

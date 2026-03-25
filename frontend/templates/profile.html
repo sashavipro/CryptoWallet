@@ -46,9 +46,9 @@
     <div class="section-title">Profile</div>
     <div class="card">
         <div class="avatar-section">
-            <img src="{{ current_user.avatar_url or '/static/img/default-avatar.png' }}" alt="Avatar" class="avatar-large" id="profileAvatar">
+            <img src="/static/img/default-avatar.png" alt="Avatar" class="avatar-large" id="profileAvatar">
             <div>
-                <div style="font-weight: bold; margin-bottom: 5px;">{{ current_user.username }}</div>
+                <div style="font-weight: bold; margin-bottom: 5px;" id="profileHeaderName">Loading...</div>
                 <div class="avatar-actions">
                     <input type="file" id="avatarUploadInput" accept="image/*" style="display: none;">
                     <button class="btn-update-avatar" id="btnUpdateAvatar">Update</button>
@@ -62,11 +62,11 @@
         <div class="profile-form-grid">
             <div class="form-group">
                 <label for="username">Юзернейм</label>
-                <input type="text" id="username" value="{{ current_user.username }}">
+                <input type="text" id="username" value="">
             </div>
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" value="{{ current_user.email }}" disabled title="Поле email нельзя менять">
+                <input type="email" id="email" value="" disabled title="Поле email нельзя менять">
             </div>
         </div>
 

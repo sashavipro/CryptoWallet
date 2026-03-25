@@ -43,44 +43,46 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:-guest}
     ports:
       - "5672:5672"
-      - "15672:15672" # Веб-интерфейс RabbitMQ
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
-
-  # --- НАШИ ПАЙТОН СЕРВИСЫ ---
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: crypto_api
-    # Горячая перезагрузка кода (--reload), чтобы не пересобирать докер при правках
     command: uvicorn src.presentation.http.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     volumes:
-      # Прокидываем весь проект внутрь
       - .:/app
     env_file:
       - backend/rest_api/.env
     environment:
-      # Жестко переопределяем пути, чтобы они смотрели во внутреннюю сеть Docker
       - DB_HOST=postgres
       - DB_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
     depends_on:
-      - postgres
-      - redis
-      - rabbitmq
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   worker:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: crypto_worker
-    # Запуск воркера TaskIQ
     command: taskiq worker src.infrastructure.message_broker.broker:broker src.infrastructure.message_broker.tasks
     volumes:
       - .:/app
@@ -92,10 +94,12 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
     depends_on:
-      - rabbitmq
-      - postgres
-      - redis
-
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
 volumes:
   postgres_data:
   mongo_data:

@@ -10,7 +10,12 @@ from src.application.dtos.request import RegisterUserRequest
 from src.application.dtos.response import TokenResponse
 from src.application.interactors import LoginUserInteractor
 from src.application.interactors import RegisterUserInteractor
+from src.domain.exceptions import InvalidCredentialsException
+from src.domain.exceptions import UserAlreadyExistsException
 from src.presentation.http.dependencies.rate_limit import check_rate_limit
+from src.presentation.http.responses import RateLimitError
+from src.presentation.http.responses import ValidationError
+from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(
     prefix="/api/v1/auth",
@@ -19,7 +24,18 @@ router = APIRouter(
 )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    responses=create_error_responses(
+        ValueError,
+        ValidationError,
+        InvalidCredentialsException,
+        RateLimitError,
+    ),
+    summary="User Login",
+    description="Authenticate user and return JWT token. Protected by Rate Limiter.",
+)
 @inject
 async def login(
     request: LoginUserRequest,
@@ -29,7 +45,18 @@ async def login(
     return await interactor(request)
 
 
-@router.post("/register", response_model=TokenResponse)
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    responses=create_error_responses(
+        ValueError,
+        ValidationError,
+        UserAlreadyExistsException,
+        RateLimitError,
+    ),
+    summary="User Registration",
+    description="Register a new user and return JWT token. Protected by Rate Limiter.",
+)
 @inject
 async def register(
     request: RegisterUserRequest,

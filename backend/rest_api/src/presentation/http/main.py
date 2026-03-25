@@ -1,5 +1,7 @@
 """rest_api/src/presentation/http/main.py."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -22,17 +24,30 @@ from src.presentation.http.routers.pages import router as pages_router
 from src.presentation.http.routers.profile import router as profile_router
 
 setup_logging()
+logger = logging.getLogger(__name__)
 
 # Вычисляем путь до папки frontend/static
 # main.py -> http -> presentation -> src -> rest_api -> backend -> CryptoWallet
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
 
+MAX_RETRIES = 5
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage the application lifespan, including background connections."""
-    await broker.startup()
+    for attempt in range(MAX_RETRIES):
+        try:
+            await broker.startup()
+            logger.info("Successfully connected to RabbitMQ!")
+            break
+        except Exception as e:
+            if attempt == MAX_RETRIES - 1:
+                raise
+            logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
+            await asyncio.sleep(5)
+
     yield
     await broker.shutdown()
 

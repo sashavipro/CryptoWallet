@@ -18,14 +18,27 @@ from src.application.interactors.profile import GenerateAvatarUploadUrlInteracto
 from src.application.interactors.profile import GetOtherProfileInteractor
 from src.application.interactors.profile import GetUserInteractor
 from src.application.interactors.profile import UpdateUserInteractor
+from src.domain.exceptions import InvalidCredentialsException
+from src.domain.exceptions import UserAlreadyExistsException
+from src.domain.exceptions import UserNotFoundException
 from src.presentation.http.dependencies.auth import get_current_user_id
+from src.presentation.http.responses import ValidationError
+from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/profile", tags=["profile"])
 
 CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
 
 
-@router.get("/me", response_model=UserResponse)
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    responses=create_error_responses(
+        InvalidCredentialsException,
+        UserNotFoundException,
+    ),
+    summary="Get Current User Profile",
+)
 @inject
 async def get_current_user_profile(
     user_id: CurrentUserId,
@@ -35,7 +48,18 @@ async def get_current_user_profile(
     return await interactor(user_id)
 
 
-@router.patch("/me", response_model=UserResponse)
+@router.patch(
+    "/me",
+    response_model=UserResponse,
+    responses=create_error_responses(
+        ValueError,
+        ValidationError,
+        InvalidCredentialsException,
+        UserNotFoundException,
+        UserAlreadyExistsException,
+    ),
+    summary="Update Current User Profile",
+)
 @inject
 async def update_current_user_profile(
     request: UpdateUserRequest,
@@ -46,7 +70,15 @@ async def update_current_user_profile(
     return await interactor(user_id, request)
 
 
-@router.delete("/me/avatar", response_model=UserResponse)
+@router.delete(
+    "/me/avatar",
+    response_model=UserResponse,
+    responses=create_error_responses(
+        InvalidCredentialsException,
+        UserNotFoundException,
+    ),
+    summary="Delete Current User Avatar",
+)
 @inject
 async def delete_current_user_avatar(
     user_id: CurrentUserId,
@@ -56,7 +88,17 @@ async def delete_current_user_avatar(
     return await interactor(user_id)
 
 
-@router.put("/password", response_model=UserResponse)
+@router.put(
+    "/password",
+    response_model=UserResponse,
+    responses=create_error_responses(
+        ValueError,
+        ValidationError,
+        InvalidCredentialsException,
+        UserNotFoundException,
+    ),
+    summary="Change User Password",
+)
 @inject
 async def change_password(
     request: ChangePasswordRequest,
@@ -67,7 +109,16 @@ async def change_password(
     return await interactor(user_id, request)
 
 
-@router.get("/{target_user_id}", response_model=PublicProfileResponse)
+@router.get(
+    "/{target_user_id}",
+    response_model=PublicProfileResponse,
+    responses=create_error_responses(
+        ValidationError,
+        InvalidCredentialsException,
+        UserNotFoundException,
+    ),
+    summary="Get Public Profile",
+)
 @inject
 async def get_other_user_profile(
     target_user_id: uuid.UUID,
@@ -78,12 +129,20 @@ async def get_other_user_profile(
     return await interactor(target_user_id)
 
 
-@router.get("/me/avatar/presigned-url")
+@router.get(
+    "/me/avatar/presigned-url",
+    responses=create_error_responses(
+        ValueError,
+        ValidationError,
+        InvalidCredentialsException,
+    ),
+    summary="Get Presigned URL for Avatar Upload",
+)
 @inject
 async def get_avatar_presigned_url(
     user_id: CurrentUserId,
-    extension: str,  # например 'png'
-    content_type: str,  # например 'image/png'
+    extension: str,
+    content_type: str,
     interactor: FromDishka[GenerateAvatarUploadUrlInteractor],
 ):
     """Get a direct S3 upload link for a new avatar."""

@@ -53,3 +53,12 @@ class UserGateway:
             logger.debug("User with email %s not found", email)
             return None
         return map_user_to_domain(db_user)
+
+    async def update_user(self, user: DomainUser) -> DomainUser:
+        """Update existing user records."""
+        logger.debug("Updating user: %s", user.id)
+        db_user = map_domain_to_model(user)
+        merged_user = await self.session.merge(db_user)
+        await self.session.flush()
+        logger.info("User updated: %s", user.id)
+        return map_user_to_domain(merged_user)
