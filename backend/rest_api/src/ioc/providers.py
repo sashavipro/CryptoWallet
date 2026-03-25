@@ -33,6 +33,7 @@ from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
 from src.infrastructure.cache.rate_limiter import RedisRateLimiter
 from src.infrastructure.cache.stats import RedisStatsGateway
+from src.infrastructure.cache.user_cache import CachedUserGateway
 from src.infrastructure.events.taskiq_publisher import TaskiqEventPublisher
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
@@ -119,11 +120,18 @@ class DbProvider(Provider):
         async with sessionmaker() as session:
             yield session
 
-    user_gateway = provide(SqlaUserGateway, scope=Scope.REQUEST, provides=UserGateway)
+    @provide(scope=Scope.REQUEST)
+    def provide_cached_user_gateway(
+        self, db_gateway: SqlaUserGateway, redis: Redis
+    ) -> UserGateway:
+        """Оборачиваем БД-шлюз в Redis-кэш."""
+        return CachedUserGateway(db_gateway=db_gateway, redis_client=redis)
+
     permission_gateway = provide(
         SqlaPermissionGateway, scope=Scope.REQUEST, provides=PermissionGateway
     )
     uow = provide(SqlaUnitOfWork, scope=Scope.REQUEST, provides=UnitOfWork)
+    sqla_user_gateway = provide(SqlaUserGateway, scope=Scope.REQUEST)
 
 
 class InteractorProvider(Provider):
