@@ -46,9 +46,9 @@ from src.infrastructure.persistence.database.gateways import SqlaUnitOfWork
 from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
+from src.infrastructure.providers.do_spaces_provider import DOSpacesUploader
 from src.infrastructure.providers.jwt_provider import JwtProvider as JwtProviderImpl
 from src.infrastructure.providers.mailjet_provider import MailjetProvider
-from src.infrastructure.providers.s3_file_uploader import S3FileUploader
 from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
 from src.infrastructure.settings import MailSettings
@@ -114,7 +114,7 @@ class InfrastructureProvider(Provider, scope=Scope.APP):
     jwt_provider = provide(JwtProviderImpl, provides=JwtProviderPort)
     event_publisher = provide(TaskiqEventPublisher, provides=EventPublisher)
     mail_provider = provide(MailjetProvider, provides=MailProvider)
-    file_uploader = provide(S3FileUploader, provides=FileUploader)
+    file_uploader = provide(DOSpacesUploader, provides=FileUploader)
 
     stats_gateway = provide(
         RedisStatsGateway, scope=Scope.REQUEST, provides=StatsGateway
