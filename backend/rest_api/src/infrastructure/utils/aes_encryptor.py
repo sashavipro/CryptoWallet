@@ -5,7 +5,7 @@ import logging
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 
-from src.infrastructure.settings import security_settings
+from src.infrastructure.settings import SecuritySettings
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 class AesEncryptor:
     """Two-way encryptor implementation using AES (Fernet)."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings: SecuritySettings) -> None:
         """Initialize encryptor with the secret key."""
-        self._fernet = Fernet(security_settings.AES_SECRET_KEY)
+        self.settings = settings
+        self._fernet = Fernet(self.settings.AES_SECRET_KEY)
 
     def encrypt(self, data: str) -> str:
         """Encrypt a plain string."""

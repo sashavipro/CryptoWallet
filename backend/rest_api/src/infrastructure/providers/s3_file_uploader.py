@@ -7,7 +7,7 @@ import aioboto3
 from botocore.exceptions import ClientError
 
 from src.application.ports.providers.file_provider import FileUploader
-from src.infrastructure.settings import s3_settings
+from src.infrastructure.settings import S3Settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,26 +15,27 @@ logger = logging.getLogger(__name__)
 class S3FileUploader(FileUploader):
     """Aioboto3 implementation for S3 compatible storage."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings: S3Settings) -> None:
         """Initialize the S3 file uploader."""
+        self.settings = settings
         self.session = aioboto3.Session()
-        self.bucket = s3_settings.S3_BUCKET_NAME
+        self.bucket = self.settings.S3_BUCKET_NAME
 
         self.client_kwargs = {
             "service_name": "s3",
-            "region_name": s3_settings.S3_REGION_NAME,
-            "aws_access_key_id": s3_settings.S3_ACCESS_KEY_ID,
-            "aws_secret_access_key": s3_settings.S3_SECRET_ACCESS_KEY,
+            "region_name": self.settings.S3_REGION_NAME,
+            "aws_access_key_id": self.settings.S3_ACCESS_KEY_ID,
+            "aws_secret_access_key": self.settings.S3_SECRET_ACCESS_KEY,
         }
-        if s3_settings.S3_ENDPOINT_URL:
-            self.client_kwargs["endpoint_url"] = s3_settings.S3_ENDPOINT_URL
+        if self.settings.S3_ENDPOINT_URL:
+            self.client_kwargs["endpoint_url"] = self.settings.S3_ENDPOINT_URL
 
     def _get_public_url(self, file_name: str) -> str:
         """Construct the public URL for a file."""
-        if s3_settings.S3_PUBLIC_URL:
-            return f"{s3_settings.S3_PUBLIC_URL.rstrip('/')}/{file_name}"
+        if self.settings.S3_PUBLIC_URL:
+            return f"{self.settings.S3_PUBLIC_URL.rstrip('/')}/{file_name}"
         # Fallback (AWS style)
-        return f"https://{self.bucket}.s3.{s3_settings.S3_REGION_NAME}.amazonaws.com/{file_name}"
+        return f"https://{self.bucket}.s3.{self.settings.S3_REGION_NAME}.amazonaws.com/{file_name}"
 
     def _extract_key_from_url(self, file_url: str) -> str:
         """Extract the S3 Object Key from a public URL."""

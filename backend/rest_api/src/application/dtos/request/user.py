@@ -1,80 +1,37 @@
 """rest_api/src/application/dtos/requests/user.py."""
 
-from pydantic import BaseModel
-from pydantic import Field
+from dataclasses import dataclass
 
 
-class RegisterUserRequest(BaseModel):
+@dataclass
+class RegisterUserRequest:
     """DTO for user registration."""
 
-    email: str = Field(
-        ...,
-        description="User's email address",
-        examples=["test@example.com"],
-    )
-    username: str = Field(
-        ...,
-        min_length=3,
-        max_length=50,
-        description="User's display name",
-        examples=["crypto_ninja"],
-    )
-    password: str = Field(
-        ...,
-        min_length=8,
-        max_length=20,
-        description="Raw password",
-        examples=["SuperSecret123!"],
-    )
+    email: str
+    username: str
+    password: str
 
 
-class LoginUserRequest(BaseModel):
+@dataclass
+class LoginUserRequest:
     """DTO for user login."""
 
-    email: str = Field(
-        ...,
-        description="User's email address",
-        examples=["test@example.com"],
-    )
-    password: str = Field(
-        ...,
-        description="Raw password",
-        examples=["SuperSecret123!"],
-    )
-    remember_me: bool = Field(
-        default=False, description="Flag for long-lived session (eternal vs 15 seconds)"
-    )
+    email: str
+    password: str
+    remember_me: bool = False
 
 
-class UpdateUserRequest(BaseModel):
-    """DTO for updating user profile.
+@dataclass
+class UpdateUserRequest:
+    """DTO for updating user profile."""
 
-    All fields are optional, meaning the user can send only the fields
-    they want to update.
-    """
-
-    username: str | None = Field(
-        None,
-        min_length=3,
-        max_length=50,
-        description="New display name",
-    )
-    avatar_url: str | None = Field(
-        None,
-        description="URL to the new avatar image",
-    )
+    username: str | None = None
+    avatar_url: str | None = None
 
 
-class ChangePasswordRequest(BaseModel):
+@dataclass
+class ChangePasswordRequest:
     """DTO for changing user password."""
 
-    old_password: str = Field(
-        ...,
-        description="Current raw password",
-    )
-    new_password: str = Field(
-        ...,
-        min_length=8,
-        max_length=20,
-        description="New raw password",
-    )
+    old_password: str
+    new_password: str

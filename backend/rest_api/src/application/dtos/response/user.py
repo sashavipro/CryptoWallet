@@ -1,44 +1,34 @@
 """rest_api/src/application/dtos/responses/user.py."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
 
-from pydantic import BaseModel
-from pydantic import ConfigDict
-from pydantic import Field
+
+@dataclass
+class UserResponse:
+    """DTO for the current user's full profile."""
+
+    id: uuid.UUID
+    email: str
+    username: str
+    is_active: bool
+    created_at: datetime
+    avatar_url: str | None = None
 
 
-class UserResponse(BaseModel):
-    """DTO for the current user's full profile.
+@dataclass
+class PublicProfileResponse:
+    """DTO for another user's public profile."""
 
-    Used as a response for Registration, Get Me, and Update User endpoints.
-    """
-
-    id: uuid.UUID = Field(..., description="Unique identifier of the user")
-    email: str = Field(..., description="User's email address")
-    username: str = Field(..., description="User's display name")
-    avatar_url: str | None = Field(None, description="URL to the user's avatar")
-    is_active: bool = Field(..., description="Account activation status")
-    created_at: datetime = Field(..., description="Timestamp of account creation")
-
-    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    username: str
+    avatar_url: str | None = None
 
 
-class PublicProfileResponse(BaseModel):
-    """DTO for another user's public profile.
-
-    Excludes sensitive information such as email, active status, and creation date.
-    """
-
-    id: uuid.UUID = Field(..., description="Unique identifier of the user")
-    username: str = Field(..., description="User's display name")
-    avatar_url: str | None = Field(None, description="URL to the user's avatar")
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class UserStatsResponse(BaseModel):
+@dataclass
+class UserStatsResponse:
     """DTO for user statistics."""
 
-    total_messages: int = Field(..., description="Total messages sent in global chat")
-    wallets_count: int = Field(..., description="Number of active wallets")
+    total_messages: int
+    wallets_count: int

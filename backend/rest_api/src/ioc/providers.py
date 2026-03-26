@@ -1,10 +1,12 @@
 """rest_api/src/ioc/providers.py."""
 
 from collections.abc import AsyncIterable
+from pathlib import Path
 
 from dishka import Provider
 from dishka import Scope
 from dishka import provide
+from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,8 @@ from src.application.ports.gateways import UserGateway
 from src.application.ports.gateways.stats import StatsGateway
 from src.application.ports.providers import JwtProvider as JwtProviderPort
 from src.application.ports.providers.file_provider import FileUploader
+from src.application.ports.providers.mail_provider import MailProvider
+from src.application.ports.utils import Encryptor
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
@@ -43,47 +47,89 @@ from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
 from src.infrastructure.providers.jwt_provider import JwtProvider as JwtProviderImpl
+from src.infrastructure.providers.mailjet_provider import MailjetProvider
 from src.infrastructure.providers.s3_file_uploader import S3FileUploader
+from src.infrastructure.settings import AuthSettings
+from src.infrastructure.settings import DatabaseSettings
+from src.infrastructure.settings import MailSettings
+from src.infrastructure.settings import RedisSettings
+from src.infrastructure.settings import S3Settings
+from src.infrastructure.settings import SecuritySettings
+from src.infrastructure.settings import auth_settings
+from src.infrastructure.settings import mail_settings
 from src.infrastructure.settings import redis_settings
-from src.infrastructure.settings import settings
+from src.infrastructure.settings import s3_settings
+from src.infrastructure.settings import security_settings
+from src.infrastructure.settings import settings as db_settings
+from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.infrastructure.utils.datetime_generator import DatetimeGenerator
 from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
 from src.infrastructure.utils.uuid_generator import UuidGenerator
 
 
-class UtilsProvider(Provider):
+class UtilsProvider(Provider, scope=Scope.APP):
     """DI provider for utility services."""
 
-    password_hasher = provide(PwdlibHasher, scope=Scope.APP, provides=PasswordHasher)
-    id_generator = provide(UuidGenerator, scope=Scope.APP, provides=IdGenerator)
-    time_provider = provide(DatetimeGenerator, scope=Scope.APP, provides=TimeProvider)
+    password_hasher = provide(PwdlibHasher, provides=PasswordHasher)
+    id_generator = provide(UuidGenerator, provides=IdGenerator)
+    time_provider = provide(DatetimeGenerator, provides=TimeProvider)
+    encryptor = provide(AesEncryptor, provides=Encryptor)
 
 
-class InfrastructureProvider(Provider):
+class InfrastructureProvider(Provider, scope=Scope.APP):
     """DI provider for infrastructure and external integrations."""
 
-    jwt_provider = provide(JwtProviderImpl, scope=Scope.APP, provides=JwtProviderPort)
-    event_publisher = provide(
-        TaskiqEventPublisher, scope=Scope.APP, provides=EventPublisher
-    )
+    @provide
+    def provide_auth_settings(self) -> AuthSettings:
+        """Provide authentication settings."""
+        return auth_settings
+
+    @provide
+    def provide_mail_settings(self) -> MailSettings:
+        """Provide Mailjet and email settings."""
+        return mail_settings
+
+    @provide
+    def provide_s3_settings(self) -> S3Settings:
+        """Provide S3 and file storage settings."""
+        return s3_settings
+
+    @provide
+    def provide_redis_settings(self) -> RedisSettings:
+        """Provide Redis connection settings."""
+        return redis_settings
+
+    @provide
+    def provide_security_settings(self) -> SecuritySettings:
+        """Provide security and encryption settings."""
+        return security_settings
+
+    @provide
+    def provide_templates(self) -> Jinja2Templates:
+        """Provide Jinja2 templates for Server-Side Rendering."""
+        project_root = Path(__file__).resolve().parents[4]
+        templates_dir = project_root / "frontend" / "templates"
+        return Jinja2Templates(directory=str(templates_dir))
+
+    jwt_provider = provide(JwtProviderImpl, provides=JwtProviderPort)
+    event_publisher = provide(TaskiqEventPublisher, provides=EventPublisher)
+    mail_provider = provide(MailjetProvider, provides=MailProvider)
+    file_uploader = provide(S3FileUploader, provides=FileUploader)
+
     stats_gateway = provide(
         RedisStatsGateway, scope=Scope.REQUEST, provides=StatsGateway
     )
 
-    @provide(scope=Scope.APP)
-    async def provide_redis(self) -> AsyncIterable[Redis]:
-        """Provide a Redis client instance."""
-        client = Redis.from_url(redis_settings.REDIS_URL, decode_responses=True)
+    @provide
+    async def provide_redis(self, settings: RedisSettings) -> AsyncIterable[Redis]:
+        """Provide a Redis client instance, injecting RedisSettings."""
+        client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         yield client
         await client.aclose()
 
-    @provide(scope=Scope.APP)
+    @provide
     def provide_rate_limiter(self, redis_client: Redis) -> RedisRateLimiter:
-        """Provide the Redis-based rate limiter.
-
-        Using stricter rules for auth endpoints
-        (e.g., 5 requests per minute, ban for 5 min).
-        """
+        """Provide the Redis-based rate limiter."""
         return RedisRateLimiter(
             redis_client=redis_client,
             max_requests=5,
@@ -91,21 +137,21 @@ class InfrastructureProvider(Provider):
             ban_seconds=300,
         )
 
-    @provide(scope=Scope.APP)
-    def provide_file_uploader(self) -> FileUploader:
-        """Provide S3 file uploader implementation."""
-        return S3FileUploader()
 
-
-class DbProvider(Provider):
+class DbProvider(Provider, scope=Scope.APP):
     """DI provider for database and gateways."""
 
-    @provide(scope=Scope.APP)
-    def provide_engine(self) -> AsyncEngine:
-        """Provide the SQLAlchemy async engine."""
+    @provide
+    def provide_db_settings(self) -> DatabaseSettings:
+        """Provide database connection settings."""
+        return db_settings
+
+    @provide
+    def provide_engine(self, settings: DatabaseSettings) -> AsyncEngine:
+        """Provide the SQLAlchemy async engine, injecting DatabaseSettings."""
         return create_async_engine(settings.database_url, echo=False)
 
-    @provide(scope=Scope.APP)
+    @provide
     def provide_sessionmaker(
         self, engine: AsyncEngine
     ) -> async_sessionmaker[AsyncSession]:
@@ -124,7 +170,7 @@ class DbProvider(Provider):
     def provide_cached_user_gateway(
         self, db_gateway: SqlaUserGateway, redis: Redis
     ) -> UserGateway:
-        """Оборачиваем БД-шлюз в Redis-кэш."""
+        """Convert the database gateway to a Redis cache."""
         return CachedUserGateway(db_gateway=db_gateway, redis_client=redis)
 
     permission_gateway = provide(
@@ -134,27 +180,21 @@ class DbProvider(Provider):
     sqla_user_gateway = provide(SqlaUserGateway, scope=Scope.REQUEST)
 
 
-class InteractorProvider(Provider):
+class InteractorProvider(Provider, scope=Scope.REQUEST):
     """DI provider for application use cases."""
 
     # Auth
-    login_interactor = provide(LoginUserInteractor, scope=Scope.REQUEST)
-    register_interactor = provide(RegisterUserInteractor, scope=Scope.REQUEST)
+    login_interactor = provide(LoginUserInteractor)
+    register_interactor = provide(RegisterUserInteractor)
 
     # Profile
-    get_user_interactor = provide(GetUserInteractor, scope=Scope.REQUEST)
-    update_user_interactor = provide(UpdateUserInteractor, scope=Scope.REQUEST)
-    get_other_profile_interactor = provide(
-        GetOtherProfileInteractor, scope=Scope.REQUEST
-    )
-    delete_avatar_interactor = provide(DeleteAvatarInteractor, scope=Scope.REQUEST)
-    change_password_interactor = provide(ChangePasswordInteractor, scope=Scope.REQUEST)
-    generate_avatar_upload_url_interactor = provide(
-        GenerateAvatarUploadUrlInteractor, scope=Scope.REQUEST
-    )
+    get_user_interactor = provide(GetUserInteractor)
+    update_user_interactor = provide(UpdateUserInteractor)
+    get_other_profile_interactor = provide(GetOtherProfileInteractor)
+    delete_avatar_interactor = provide(DeleteAvatarInteractor)
+    change_password_interactor = provide(ChangePasswordInteractor)
+    generate_avatar_upload_url_interactor = provide(GenerateAvatarUploadUrlInteractor)
 
     # Stats
-    get_stats_interactor = provide(GetStatsInteractor, scope=Scope.REQUEST)
-    increment_messages_interactor = provide(
-        IncrementTotalMessagesInteractor, scope=Scope.REQUEST
-    )
+    get_stats_interactor = provide(GetStatsInteractor)
+    increment_messages_interactor = provide(IncrementTotalMessagesInteractor)

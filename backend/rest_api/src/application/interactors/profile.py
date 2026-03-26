@@ -30,7 +30,15 @@ class GetUserInteractor:
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
-        return UserResponse.model_validate(user)
+
+        return UserResponse(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            is_active=user.is_active,
+            created_at=user.created_at,
+            avatar_url=user.avatar_url,
+        )
 
 
 class GetOtherProfileInteractor:
@@ -45,7 +53,12 @@ class GetOtherProfileInteractor:
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
-        return PublicProfileResponse.model_validate(user)
+
+        return PublicProfileResponse(
+            id=user.id,
+            username=user.username,
+            avatar_url=user.avatar_url,
+        )
 
 
 class UpdateUserInteractor:
@@ -74,7 +87,14 @@ class UpdateUserInteractor:
         async with self.uow:
             updated_user = await self.user_gateway.update_user(user)
 
-        return UserResponse.model_validate(updated_user)
+        return UserResponse(
+            id=updated_user.id,
+            email=updated_user.email,
+            username=updated_user.username,
+            is_active=updated_user.is_active,
+            created_at=updated_user.created_at,
+            avatar_url=updated_user.avatar_url,
+        )
 
 
 class DeleteAvatarInteractor:
@@ -101,7 +121,14 @@ class DeleteAvatarInteractor:
             async with self.uow:
                 user = await self.user_gateway.update_user(user)
 
-        return UserResponse.model_validate(user)
+        return UserResponse(
+            id=user.id,
+            email=user.email,
+            username=user.username,
+            is_active=user.is_active,
+            created_at=user.created_at,
+            avatar_url=user.avatar_url,
+        )
 
 
 class ChangePasswordInteractor:
@@ -142,7 +169,14 @@ class ChangePasswordInteractor:
         async with self.uow:
             updated_user = await self.user_gateway.update_user(user)
 
-        return UserResponse.model_validate(updated_user)
+        return UserResponse(
+            id=updated_user.id,
+            email=updated_user.email,
+            username=updated_user.username,
+            is_active=updated_user.is_active,
+            created_at=updated_user.created_at,
+            avatar_url=updated_user.avatar_url,
+        )
 
 
 class GenerateAvatarUploadUrlInteractor:
