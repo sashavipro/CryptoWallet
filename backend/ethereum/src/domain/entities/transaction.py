@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from src.domain.exceptions import InvalidTransactionStateException
 from src.domain.exceptions import NegativeFeeException
-from src.domain.value_objects.transaction.tx_status import TransactionStatus
+from src.domain.value_objects.transaction import TransactionStatus
 
 from .base import BaseEntity
 

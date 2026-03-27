@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from src.domain.exceptions import InvalidAssetConfigurationException
-from src.domain.value_objects.asset.asset_type import AssetType
+from src.domain.value_objects.asset import AssetType
 
 from .base import BaseEntity
 
