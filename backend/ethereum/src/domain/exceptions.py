@@ -71,3 +71,7 @@ class InvalidAssetSymbolException(DomainException):
 
 class InvalidDecimalsException(DomainException):
     """Decimals must be between 0 and 36."""
+
+
+class WalletAlreadyExistsException(DomainException):
+    """User already has a wallet for this asset."""

@@ -28,3 +28,7 @@ class Web3Provider(Protocol):
     async def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any] | None:
         """Check the status of a transaction on the blockchain."""
         ...
+
+    def get_address_from_private_key(self, private_key: str) -> str:
+        """Derive the public Ethereum address from a raw private key."""
+        ...
