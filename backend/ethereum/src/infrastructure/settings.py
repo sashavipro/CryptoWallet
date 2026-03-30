@@ -6,7 +6,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
-# Путь к папке certs (для проверки JWT токенов от REST API)
+# Путь к папке certs (для проверки JWT токенов от REST API, если требуется)
 # infrastructure(1) -> src(2) -> ethereum(3) -> backend(4) -> CryptoWallet(5)
 CERTS_DIR = Path(__file__).resolve().parents[4] / "certs"
 
@@ -71,9 +71,18 @@ class RabbitMQSettings(BaseSettings):
 
 
 class Web3Settings(BaseSettings):
-    """Blockchain Node provider settings (Infura, Alchemy, etc.)."""
+    """Blockchain Node provider settings (Infura, Alchemy, etc.) and Faucet."""
 
     WEB3_PROVIDER_URI: str = "wss://ethereum-sepolia.publicnode.com"
+
+    # Настройки для Etherscan
+    ETHERSCAN_API_KEY: str | None = None
+    ETHERSCAN_BASE_URL: str = "https://api-sepolia.etherscan.io/api"
+
+    # Настройки для Фаусета (мастер-кошелька)
+    FAUCET_PRIVATE_KEY_ENCRYPTED: str
+    FAUCET_MASTER_ADDRESS: str
+    FAUCET_AMOUNT_ETH: float = 0.01
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"

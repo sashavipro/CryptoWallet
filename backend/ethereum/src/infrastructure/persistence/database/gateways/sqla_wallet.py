@@ -37,6 +37,14 @@ class WalletGateway:
 
         return map_wallet_to_domain(db_wallet) if db_wallet else None
 
+    async def get_wallets_by_user_id(self, user_id: uuid.UUID) -> list[DomainWallet]:
+        """Retrieve all wallets for a specific user."""
+        query = select(DBWallet).where(DBWallet.user_id == user_id)
+        result = await self.session.execute(query)
+        db_wallets = result.scalars().all()
+
+        return [map_wallet_to_domain(w) for w in db_wallets]
+
     async def get_wallet_by_user_and_asset(
         self, user_id: uuid.UUID, asset_id: uuid.UUID
     ) -> DomainWallet | None:

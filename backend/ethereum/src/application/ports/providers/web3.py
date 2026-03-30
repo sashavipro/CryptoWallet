@@ -4,8 +4,7 @@ from decimal import Decimal
 from typing import Any
 from typing import Protocol
 
-from src.domain.entities import Wallet
-from src.domain.value_objects.shared import EthereumAddress
+from src.domain.value_objects.shared.address import EthereumAddress
 
 
 class Web3Provider(Protocol):
@@ -15,12 +14,26 @@ class Web3Provider(Protocol):
         """Generate a new wallet account (address and private key)."""
         ...
 
+    def get_address_from_private_key(self, private_key: str) -> str:
+        """Derive the public Ethereum address from a raw private key."""
+        ...
+
     async def get_balance(self, address: EthereumAddress) -> Decimal:
         """Get the native currency balance of a given address."""
         ...
 
-    async def send_transaction(
-        self, from_wallet: Wallet, to_address: EthereumAddress, value: Decimal
+    async def get_transaction_count(self, address: EthereumAddress) -> int:
+        """Get the number of transactions sent from an address (nonce)."""
+        ...
+
+    async def send_transaction(  # noqa: PLR0913
+        self,
+        raw_private_key: str,
+        from_address: EthereumAddress,
+        to_address: EthereumAddress,
+        value: Decimal,
+        nonce: int,
+        gas_limit: int = 21000,
     ) -> str:
         """Send native currency and return the transaction hash."""
         ...
@@ -29,6 +42,6 @@ class Web3Provider(Protocol):
         """Check the status of a transaction on the blockchain."""
         ...
 
-    def get_address_from_private_key(self, private_key: str) -> str:
-        """Derive the public Ethereum address from a raw private key."""
+    async def get_gas_price(self) -> Decimal:
+        """Get the current gas price from the network."""
         ...

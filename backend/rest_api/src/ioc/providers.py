@@ -67,8 +67,10 @@ from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
 from src.infrastructure.utils.uuid_generator import UuidGenerator
 
 
-class UtilsProvider(Provider, scope=Scope.APP):
+class UtilsProvider(Provider):
     """DI provider for utility services."""
+
+    scope = Scope.APP
 
     password_hasher = provide(PwdlibHasher, provides=PasswordHasher)
     id_generator = provide(UuidGenerator, provides=IdGenerator)
@@ -76,8 +78,10 @@ class UtilsProvider(Provider, scope=Scope.APP):
     encryptor = provide(AesEncryptor, provides=Encryptor)
 
 
-class InfrastructureProvider(Provider, scope=Scope.APP):
+class InfrastructureProvider(Provider):
     """DI provider for infrastructure and external integrations."""
+
+    scope = Scope.APP
 
     @provide
     def provide_auth_settings(self) -> AuthSettings:
@@ -138,8 +142,10 @@ class InfrastructureProvider(Provider, scope=Scope.APP):
         )
 
 
-class DbProvider(Provider, scope=Scope.APP):
+class DbProvider(Provider):
     """DI provider for database and gateways."""
+
+    scope = Scope.APP
 
     @provide
     def provide_db_settings(self) -> DatabaseSettings:
@@ -180,8 +186,10 @@ class DbProvider(Provider, scope=Scope.APP):
     sqla_user_gateway = provide(SqlaUserGateway, scope=Scope.REQUEST)
 
 
-class InteractorProvider(Provider, scope=Scope.REQUEST):
+class InteractorProvider(Provider):
     """DI provider for application use cases."""
+
+    scope = Scope.REQUEST
 
     # Auth
     login_interactor = provide(LoginUserInteractor)

@@ -20,3 +20,21 @@ class WalletResponse:
     balance: Decimal
     balance_updated_at: datetime | None
     created_at: datetime
+
+
+@dataclass
+class WalletBalanceResponse:
+    """DTO for exposing a single wallet's balance."""
+
+    wallet_id: uuid.UUID
+    address: str
+    balance: Decimal
+    balance_updated_at: datetime | None
+
+
+@dataclass
+class CachedBalance:
+    """Represents a cached wallet balance with its update timestamp."""
+
+    balance: Decimal
+    updated_at: datetime

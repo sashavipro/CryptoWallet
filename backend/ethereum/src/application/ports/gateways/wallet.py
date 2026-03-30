@@ -3,7 +3,7 @@
 import uuid
 from typing import Protocol
 
-from src.domain.entities import Wallet
+from src.domain.entities.wallet import Wallet
 
 
 class WalletGateway(Protocol):
@@ -15,6 +15,10 @@ class WalletGateway(Protocol):
 
     async def get_wallet_by_id(self, wallet_id: uuid.UUID) -> Wallet | None:
         """Retrieve a wallet by its ID."""
+        ...
+
+    async def get_wallets_by_user_id(self, user_id: uuid.UUID) -> list[Wallet]:
+        """Retrieve all wallets for a specific user."""
         ...
 
     async def get_wallet_by_user_and_asset(
