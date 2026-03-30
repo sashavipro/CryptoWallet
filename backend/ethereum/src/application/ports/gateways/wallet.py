@@ -27,6 +27,10 @@ class WalletGateway(Protocol):
         """Retrieve a specific asset wallet for a specific user."""
         ...
 
+    async def get_wallets_by_addresses(self, addresses: list[str]) -> list[Wallet]:
+        """Retrieve wallets that match any of the provided addresses."""
+        ...
+
     async def update_wallet(self, wallet: Wallet) -> Wallet:
         """Update existing wallet records (e.g., balance updates)."""
         ...

@@ -4,8 +4,10 @@ import uuid
 from decimal import Decimal
 
 from src.application.ports.events import EventPublisher
-from src.infrastructure.message_broker import publish_balance_updated_task
-from src.infrastructure.message_broker import publish_transaction_status_updated_task
+from src.infrastructure.message_broker.tasks import publish_balance_updated_task
+from src.infrastructure.message_broker.tasks import (
+    publish_transaction_status_updated_task,
+)
 
 
 class TaskiqEventPublisherImpl(EventPublisher):

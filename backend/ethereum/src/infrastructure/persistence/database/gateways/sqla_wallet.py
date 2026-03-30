@@ -3,6 +3,7 @@
 import logging
 import uuid
 
+from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,3 +65,21 @@ class WalletGateway:
         await self.session.flush()
         logger.debug("Wallet updated: %s", wallet.id)
         return map_wallet_to_domain(merged_wallet)
+
+    async def get_wallets_by_addresses(
+        self, addresses: list[str]
+    ) -> list[DomainWallet]:
+        """Retrieve wallets that match any of the provided addresses."""
+        if not addresses:
+            return []
+
+        lower_addresses = [a.lower() for a in addresses]
+
+        query = select(DBWallet).where(
+            func.lower(DBWallet.address).in_(lower_addresses)
+        )
+
+        result = await self.session.execute(query)
+        db_wallets = result.scalars().all()
+
+        return [map_wallet_to_domain(w) for w in db_wallets]

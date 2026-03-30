@@ -1,4 +1,4 @@
-"""rest_api/cli.py."""
+"""rest_api/src/cli.py."""
 
 import asyncio
 import logging
@@ -11,6 +11,8 @@ from src.application.ports.gateways import UserGateway
 from src.application.ports.utils import PasswordHasher
 from src.domain.entities import User
 from src.domain.value_objects.user import RawPassword
+from src.infrastructure.settings import SecuritySettings
+from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.ioc.container import create_container
 
 logging.basicConfig(level=logging.INFO)
@@ -67,6 +69,24 @@ def create_superuser(email, username, password):
                 click.echo(click.style(f"Failed to create superuser: {e}", fg="red"))
 
     asyncio.run(_run())
+
+
+@cli.command()
+@click.argument("secret")
+def encrypt(secret: str):
+    """Encrypt a secret string (like a private key) using the project's AES key."""
+    try:
+        settings = SecuritySettings()
+        encryptor = AesEncryptor(settings)
+        encrypted_value = encryptor.encrypt(secret)
+
+        click.echo(click.style("Encryption successful!", fg="green"))
+        click.echo(click.style("Your encrypted key is:", fg="yellow"))
+        click.echo(click.style(encrypted_value, fg="green", bold=True))
+
+    except Exception as e:  # noqa: BLE001
+        error_message = f"An error occurred: {e}"
+        click.echo(click.style(error_message, fg="red"))
 
 
 if __name__ == "__main__":

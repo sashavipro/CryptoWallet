@@ -11,7 +11,7 @@ from src.application.dtos.response import TransactionResponse
 from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.domain.exceptions import AssetNotFoundException
 from src.domain.exceptions import WalletNotFoundException
-from src.presentation.http.exception_handlers import create_error_responses
+from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/faucet", tags=["faucet"])
 

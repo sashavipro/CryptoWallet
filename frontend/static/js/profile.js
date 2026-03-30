@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // Элементы профиля
     const btnSaveProfile = document.getElementById('btnSaveProfile');
     const inputUsername = document.getElementById('username');
     const inputEmail = document.getElementById('email');
@@ -8,16 +9,46 @@ document.addEventListener('DOMContentLoaded', () => {
     const profileAlert = document.getElementById('profileAlert');
     const profileHeaderName = document.getElementById('profileHeaderName');
 
+    // Элементы аватара
     const btnRemoveAvatar = document.getElementById('btnRemoveAvatar');
     const btnUpdateAvatar = document.getElementById('btnUpdateAvatar');
     const avatarUploadInput = document.getElementById('avatarUploadInput');
     const profileAvatar = document.getElementById('profileAvatar');
 
+    // Элементы кошельков и статистики
     const importWalletModal = document.getElementById('importWalletModal');
     const btnOpenImportModal = document.getElementById('btnOpenImportModal');
     const btnCloseImportModal = document.getElementById('btnCloseImportModal');
+    const btnCreateWallet = document.getElementById('btnCreateWallet');
+    const btnSaveWallet = document.getElementById('btnSaveWallet'); // Внутри модалки
+    const privateKeyInput = document.getElementById('privateKeyInput');
+    const walletsList = document.getElementById('walletsList');
+    const statWallets = document.getElementById('statWallets');
+    const statMessages = document.getElementById('statMessages');
 
     let initialUsername = '';
+    let ethAssetId = null; // Будет хранить UUID актива ETH из БД
+
+    // Вспомогательная функция для проверки на 401/403 ошибку
+    const checkUnauthorized = (res) => {
+        if (res.status === 401 || res.status === 403) {
+            alert("Ваша сессия истекла. Пожалуйста, авторизуйтесь заново.");
+            document.cookie = "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            window.location.href = "/login";
+            return true;
+        }
+        return false;
+    };
+
+    function showAlert(message, isError = false) {
+        profileAlert.style.display = 'block';
+        profileAlert.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
+        profileAlert.style.color = isError ? '#721c24' : '#155724';
+        profileAlert.style.border = `1px solid ${isError ? '#f5c6cb' : '#c3e6cb'}`;
+        profileAlert.textContent = message;
+
+        setTimeout(() => { profileAlert.style.display = 'none'; }, 5000);
+    }
 
     // Слушаем событие от main.js, когда данные получены с бэкенда
     document.addEventListener('UserDataLoaded', () => {
@@ -37,32 +68,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    function showAlert(message, isError = false) {
-        profileAlert.style.display = 'block';
-        profileAlert.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
-        profileAlert.style.color = isError ? '#721c24' : '#155724';
-        profileAlert.style.border = `1px solid ${isError ? '#f5c6cb' : '#c3e6cb'}`;
-        profileAlert.textContent = message;
-
-        setTimeout(() => { profileAlert.style.display = 'none'; }, 5000);
-    }
-
-    // --- Обработка кнопки SAVE ---
+    // ==========================================
+    // 1. ОБРАБОТКА ПРОФИЛЯ (ИМЯ И ПАРОЛЬ)
+    // ==========================================
     btnSaveProfile.addEventListener('click', async () => {
         let hasChanges = false;
 
-        // Вспомогательная функция для проверки на 401 ошибку
-        const checkUnauthorized = (res) => {
-            if (res.status === 401 || res.status === 403) {
-                alert("Ваша сессия истекла. Пожалуйста, авторизуйтесь заново.");
-                document.cookie = "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-                window.location.href = "/login";
-                return true;
-            }
-            return false;
-        };
-
-        // 1. Обновление Username
+        // Обновление Username
         const newUsername = inputUsername.value.trim();
         if (newUsername !== initialUsername) {
             hasChanges = true;
@@ -73,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ username: newUsername })
                 });
 
-                if (checkUnauthorized(res)) return; // Если токен протух - прерываем
+                if (checkUnauthorized(res)) return;
 
                 if (!res.ok) {
                     const data = await res.json();
@@ -87,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 2. Смена пароля
+        // Смена пароля
         const oldPass = inputOldPassword.value;
         const newPass = inputNewPassword.value;
         const repeatPass = inputRepeatPassword.value;
@@ -110,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ old_password: oldPass, new_password: newPass })
                 });
 
-                if (checkUnauthorized(res)) return; // Если токен протух - прерываем
+                if (checkUnauthorized(res)) return;
 
                 if (!res.ok) {
                     const data = await res.json();
@@ -136,7 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Удаление аватара ---
+    // ==========================================
+    // 2. ОБРАБОТКА АВАТАРОВ (S3)
+    // ==========================================
     btnRemoveAvatar.addEventListener('click', async () => {
         if (!confirm('Вы уверены, что хотите удалить аватарку?')) return;
 
@@ -154,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Обновление аватара ---
     btnUpdateAvatar.addEventListener('click', () => {
         avatarUploadInput.click();
     });
@@ -164,15 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
 
         try {
-            // 1. Просим у бэкенда временную ссылку для загрузки (Presigned URL)
             const extension = file.name.split('.').pop();
             const urlRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${file.type}`);
 
-            if (urlRes.status === 401 || urlRes.status === 403) {
-                alert("Сессия истекла");
-                window.location.href = "/login";
-                return;
-            }
+            if (checkUnauthorized(urlRes)) return;
 
             if (!urlRes.ok) {
                 showAlert('Ошибка при генерации ссылки для загрузки', true);
@@ -181,12 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const { upload_url, public_url } = await urlRes.json();
 
-            // 2. Браузер сам загружает файл напрямую в S3 корзину (через PUT запрос)
             const s3Res = await fetch(upload_url, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': file.type
-                },
+                headers: { 'Content-Type': file.type },
                 body: file
             });
 
@@ -195,7 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 3. Если загрузка успешна, говорим нашему бэкенду сохранить ссылку на аватар
             const updateRes = await fetch('/api/v1/profile/me', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -214,22 +218,179 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(error);
             showAlert('Сетевая ошибка при обновлении аватара', true);
         } finally {
-            avatarUploadInput.value = ''; // Сбрасываем инпут
+            avatarUploadInput.value = '';
         }
     });
 
-    // --- Модальное окно кошельков ---
+    // ==========================================
+    // 3. УПРАВЛЕНИЕ КОШЕЛЬКАМИ И СТАТИСТИКА
+    // ==========================================
+
+async function loadWallets() {
+        try {
+            const res = await fetch('/api/v1/wallets');
+
+            if (checkUnauthorized(res)) return;
+
+            if (res.ok) {
+                const wallets = await res.json();
+                statWallets.textContent = wallets.length;
+
+                walletsList.innerHTML = ''; // Очищаем список
+
+                if (wallets.length === 0) {
+                    walletsList.innerHTML = '<div style="color: #888; padding: 10px;">У вас пока нет кошельков. Создайте или импортируйте новый.</div>';
+                    return;
+                }
+
+                wallets.forEach(wallet => {
+                    // Используем безопасное отображение баланса, если он отсутствует, пишем 0
+                    const balance = wallet.balance !== undefined ? parseFloat(wallet.balance).toFixed(4) : '0.0000';
+                    walletsList.innerHTML += `
+                        <div class="wallet-item" style="display: flex; align-items: center; width: 100%; gap: 10px;">
+                            <span style="font-size: 18px; color: #3498db;">⟠</span>
+                            <strong style="font-size: 13px;">${wallet.address}</strong>
+                            <span style="margin-left: auto; color: #555; font-weight: bold;">${balance} ETH</span>
+                            <button class="btn-action" style="padding: 5px 10px; font-size: 12px;" onclick="requestTestEth('${wallet.id}')">Get Test ETH</button>
+                        </div>
+                    `;
+                });
+            }
+        } catch (e) {
+            console.error("Ошибка загрузки кошельков:", e);
+            walletsList.innerHTML = '<div style="color: red; padding: 10px;">Ошибка при загрузке кошельков.</div>';
+        }
+    }
+
+    // Глобальная функция для вызова из HTML (onclick)
+    window.requestTestEth = async (walletId) => {
+        try {
+            showAlert('Отправка запроса в Faucet...');
+            const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, {
+                method: 'POST'
+            });
+
+            if (checkUnauthorized(res)) return;
+
+            if (res.ok) {
+                showAlert('Транзакция отправлена! Баланс скоро обновится.');
+                setTimeout(loadWallets, 5000); // Обновляем баланс через 5 секунд
+            } else {
+                const data = await res.json();
+                showAlert(`Ошибка Faucet: ${data.detail}`, true);
+            }
+        } catch (e) {
+            showAlert('Ошибка сети при запросе тестового ETH', true);
+        }
+    };
+
+// Получаем UUID актива (ETH) из бэкенда
+    async function loadAssetId() {
+        try {
+            const res = await fetch('/api/v1/assets');
+            if (res.ok) {
+                const assets = await res.json();
+                const eth = assets.find(a => a.ticker === 'ETH');
+                if (eth) {
+                    ethAssetId = eth.id;
+                }
+            }
+        } catch (e) {
+            console.warn("API активов пока недоступно. Нужно настроить Nginx и добавить актив в БД.");
+        }
+    }
+
+    // Создание нового кошелька
+    btnCreateWallet.addEventListener('click', async () => {
+        if (!ethAssetId) {
+            showAlert('Системная ошибка: Актив ETH не найден в базе данных.', true);
+            return;
+        }
+        try {
+            const res = await fetch('/api/v1/wallets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ asset_id: ethAssetId })
+            });
+
+            if (checkUnauthorized(res)) return;
+
+            if (res.ok) {
+                showAlert('Новый ETH кошелек успешно создан!');
+                loadWallets();
+            } else {
+                const data = await res.json();
+                showAlert(`Ошибка: ${data.detail}`, true);
+            }
+        } catch (e) {
+            showAlert('Ошибка сети при создании кошелька', true);
+        }
+    });
+
+    // Импорт кошелька
+    btnSaveWallet.addEventListener('click', async () => {
+        const privateKey = privateKeyInput.value.trim();
+        if (!privateKey) {
+            showAlert('Введите приватный ключ!', true);
+            return;
+        }
+        if (!ethAssetId) {
+            showAlert('Системная ошибка: Актив ETH не найден в базе данных.', true);
+            return;
+        }
+        try {
+            const res = await fetch('/api/v1/wallets/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ asset_id: ethAssetId, private_key: privateKey })
+            });
+            if (checkUnauthorized(res)) return;
+            if (res.ok) {
+                showAlert('Кошелек успешно импортирован!');
+                privateKeyInput.value = '';
+                importWalletModal.style.display = 'none';
+                loadWallets();
+            } else {
+                const data = await res.json();
+                showAlert(`Ошибка импорта: ${data.detail}`, true);
+            }
+        } catch (e) {
+            showAlert('Ошибка сети при импорте', true);
+        }
+    });
+
+    // Загрузка статистики профиля (Сообщения)
+    async function loadStats() {
+        try {
+            const res = await fetch('/api/v1/profile/me/stats');
+            if (res.ok) {
+                const stats = await res.json();
+                // Поле зависит от того, как вы назовете его в DTO (messages_count или total_messages)
+                if (stats.messages_count !== undefined) {
+                    statMessages.textContent = stats.messages_count;
+                }
+            }
+        } catch (e) {
+            console.error("Ошибка загрузки статистики:", e);
+        }
+    }
+
+    // Модальное окно кошельков (открытие/закрытие)
     btnOpenImportModal.addEventListener('click', () => {
         importWalletModal.style.display = 'flex';
     });
-
     btnCloseImportModal.addEventListener('click', () => {
         importWalletModal.style.display = 'none';
     });
-
     importWalletModal.addEventListener('click', (e) => {
         if (e.target === importWalletModal) {
             importWalletModal.style.display = 'none';
         }
     });
+
+    // Инициализация (загружаем данные при открытии страницы)
+    loadAssetId().then(() => {
+        loadWallets();
+    });
+    loadStats();
 });

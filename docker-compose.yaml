@@ -53,10 +53,15 @@ services:
       timeout: 5s
       retries: 10
 
+  # ==========================================
+  # REST API SERVICE (Port: 8000)
+  # ==========================================
   api:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: rest_api
     container_name: crypto_api
     command: uvicorn src.presentation.http.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
@@ -82,6 +87,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: rest_api
     container_name: crypto_worker
     command: taskiq worker src.infrastructure.message_broker.broker:broker src.infrastructure.message_broker.tasks
     volumes:
@@ -100,6 +107,73 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+
+  # ==========================================
+  # ETHEREUM SERVICE (Port: 8002)
+  # ==========================================
+  ethereum_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: ethereum
+    container_name: crypto_ethereum_api
+    command: uvicorn src.presentation.http.main:app --host 0.0.0.0 --port 8002 --reload
+    ports:
+      - "8002:8002"
+    volumes:
+      - .:/app
+    env_file:
+      - backend/ethereum/.env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  ethereum_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SERVICE_NAME: ethereum
+    container_name: crypto_ethereum_worker
+    command: taskiq worker src.infrastructure.message_broker.broker:broker src.infrastructure.message_broker.tasks
+    volumes:
+      - .:/app
+    env_file:
+      - backend/ethereum/.env
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://${RABBIT_USER:-guest}:${RABBIT_PASSWORD:-guest}@rabbitmq:5672/
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  nginx:
+      image: nginx:alpine
+      container_name: crypto_nginx
+      ports:
+        - "80:80"
+      volumes:
+        - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      depends_on:
+        - api
+        - ethereum_api
+
 volumes:
   postgres_data:
   mongo_data:

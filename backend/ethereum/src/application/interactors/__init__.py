@@ -1,5 +1,6 @@
 """ethereum/src/application/interactors/__init__.py."""
 
+from .block_processor import ProcessNewBlockInteractor
 from .faucet import RequestTestnetEthInteractor
 from .transaction import CreatePendingTransactionInteractor
 from .transaction import GetTransactionsInteractor
@@ -16,6 +17,7 @@ __all__ = (
     "GetTransactionsInteractor",
     "GetWalletsInteractor",
     "ImportWalletInteractor",
+    "ProcessNewBlockInteractor",
     "RequestTestnetEthInteractor",
     "WatchTransactionStatusInteractor",
 )

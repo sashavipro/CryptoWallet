@@ -21,7 +21,7 @@ from src.domain.exceptions import AssetNotFoundException
 from src.domain.exceptions import InvalidPrivateKeyFormatException
 from src.domain.exceptions import WalletAlreadyExistsException
 from src.domain.exceptions import WalletNotFoundException
-from src.presentation.http.exception_handlers import create_error_responses
+from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/wallets", tags=["wallets"])
 
