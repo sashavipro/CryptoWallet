@@ -60,3 +60,6 @@ async def get_current_user_id(
         )
 
     return uuid.UUID(user_id_str)
+
+
+CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]

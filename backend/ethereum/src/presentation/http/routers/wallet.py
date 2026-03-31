@@ -5,6 +5,7 @@ import uuid
 from dishka.integrations.fastapi import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter
+from fastapi import Body
 from fastapi import status
 
 from src.application.dtos.request import CreateWalletRequest
@@ -38,9 +39,9 @@ router = APIRouter(prefix="/api/v1/wallets", tags=["wallets"])
 )
 @inject
 async def create_wallet(
-    request: CreateWalletRequest,
     user_id: CurrentUserId,
     interactor: FromDishka[CreateWalletInteractor],
+    request: CreateWalletRequest = Body(...),  # noqa: B008
 ) -> WalletResponse:
     """Create a new wallet."""
     request.user_id = user_id
@@ -60,9 +61,9 @@ async def create_wallet(
 )
 @inject
 async def import_existing_wallet(
-    request: ImportWalletRequest,
     user_id: CurrentUserId,
     interactor: FromDishka[ImportWalletInteractor],
+    request: ImportWalletRequest = Body(...),  # noqa: B008
 ) -> WalletResponse:
     """Import an existing wallet."""
     request.user_id = user_id
