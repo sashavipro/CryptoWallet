@@ -15,6 +15,7 @@ from src.application.interactors.transaction import GetTransactionsInteractor
 from src.domain.exceptions import AssetNotFoundException
 from src.domain.exceptions import InsufficientFundsException
 from src.domain.exceptions import WalletNotFoundException
+from src.presentation.http.dependencies.auth import CurrentUserId
 from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
@@ -35,9 +36,11 @@ router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 @inject
 async def send_transaction(
     request: CreatePendingTransactionRequest,
+    user_id: CurrentUserId,
     interactor: FromDishka[CreatePendingTransactionInteractor],
 ) -> TransactionResponse:
     """Create and send a transaction."""
+    request.user_id = user_id
     return await interactor(request)
 
 
@@ -53,6 +56,7 @@ async def send_transaction(
 @inject
 async def get_wallet_transactions(
     wallet_id: uuid.UUID,
+    user_id: CurrentUserId,
     interactor: FromDishka[GetTransactionsInteractor],
 ) -> list[dict[str, Any]]:
     """Get transaction history via Etherscan."""

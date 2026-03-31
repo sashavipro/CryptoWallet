@@ -11,6 +11,7 @@ from src.application.dtos.response import TransactionResponse
 from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.domain.exceptions import AssetNotFoundException
 from src.domain.exceptions import WalletNotFoundException
+from src.presentation.http.dependencies.auth import CurrentUserId
 from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/faucet", tags=["faucet"])
@@ -32,6 +33,7 @@ router = APIRouter(prefix="/api/v1/faucet", tags=["faucet"])
 @inject
 async def request_testnet_eth(
     wallet_id: uuid.UUID,
+    user_id: CurrentUserId,
     interactor: FromDishka[RequestTestnetEthInteractor],
 ) -> TransactionResponse:
     """Request testnet ETH from the faucet."""

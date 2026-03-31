@@ -1,12 +1,10 @@
 """ethereum/src/presentation/http/routers/wallet.py."""
 
 import uuid
-from typing import Annotated
 
 from dishka.integrations.fastapi import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter
-from fastapi import Depends
 from fastapi import status
 
 from src.application.dtos.request import CreateWalletRequest
@@ -21,19 +19,10 @@ from src.domain.exceptions import AssetNotFoundException
 from src.domain.exceptions import InvalidPrivateKeyFormatException
 from src.domain.exceptions import WalletAlreadyExistsException
 from src.domain.exceptions import WalletNotFoundException
+from src.presentation.http.dependencies.auth import CurrentUserId
 from src.presentation.http.responses import create_error_responses
 
 router = APIRouter(prefix="/api/v1/wallets", tags=["wallets"])
-
-FIXTURE_USER_ID = uuid.UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")
-
-
-async def get_current_user_id() -> uuid.UUID:
-    """Temporary dependency to provide a fixed user ID."""
-    return FIXTURE_USER_ID
-
-
-CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
 
 
 @router.post(
@@ -48,20 +37,19 @@ CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
     description="Create a new crypto wallet for a user.",
 )
 @inject
-async def create_new_wallet(
-    asset_id: uuid.UUID,
+async def create_wallet(
+    request: CreateWalletRequest,
     user_id: CurrentUserId,
     interactor: FromDishka[CreateWalletInteractor],
 ) -> WalletResponse:
     """Create a new wallet."""
-    request = CreateWalletRequest(user_id=user_id, asset_id=asset_id)
+    request.user_id = user_id
     return await interactor(request)
 
 
 @router.post(
     "/import",
     response_model=WalletResponse,
-    status_code=status.HTTP_201_CREATED,
     responses=create_error_responses(
         AssetNotFoundException,
         WalletAlreadyExistsException,
@@ -111,7 +99,10 @@ async def get_user_wallets(
 @inject
 async def get_wallet_balance(
     wallet_id: uuid.UUID,
+    user_id: CurrentUserId,
     interactor: FromDishka[GetBalanceInteractor],
 ) -> WalletBalanceResponse:
     """Get the balance of a specific wallet."""
+    # (Здесь в идеале интерактор должен проверять,
+    # принадлежит ли wallet_id этому user_id)
     return await interactor(wallet_id)
