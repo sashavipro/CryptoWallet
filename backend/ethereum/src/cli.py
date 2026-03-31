@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from src.domain.value_objects.asset.asset_type import AssetType
 from src.infrastructure.persistence.database.models.asset import Asset
 from src.infrastructure.settings import DatabaseSettings
 
@@ -24,8 +25,8 @@ async def _seed_assets(session: AsyncSession) -> None:
 
     new_eth_asset = Asset(
         id=uuid.uuid4(),
-        network="SEPOLIA",
-        asset_type="NATIVE",
+        network="sepolia",
+        asset_type=AssetType.NATIVE.value,
         name="Ethereum",
         ticker="ETH",
         decimals=18,

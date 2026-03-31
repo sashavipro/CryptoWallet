@@ -99,9 +99,29 @@ class RedisSettings(BaseSettings):
     )
 
 
+class CorsSettings(BaseSettings):
+    """CORS configuration."""
+
+    CORS_ALLOWED_ORIGINS: str = "http://localhost,http://127.0.0.1"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+    @property
+    def origins_list(self) -> list[str]:
+        """Convert comma-separated string to a list of origins."""
+        return [
+            origin.strip()
+            for origin in self.CORS_ALLOWED_ORIGINS.split(",")
+            if origin.strip()
+        ]
+
+
 settings = DatabaseSettings()
 auth_settings = AuthSettings()
 security_settings = SecuritySettings()
 mq_settings = RabbitMQSettings()
 web3_settings = Web3Settings()
 redis_settings = RedisSettings()
+cors_settings = CorsSettings()

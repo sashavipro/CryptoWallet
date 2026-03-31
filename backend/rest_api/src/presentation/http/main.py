@@ -10,10 +10,12 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
 
 from src.domain.exceptions import DomainException
 from src.infrastructure.log_config import setup_logging
 from src.infrastructure.message_broker.broker import broker
+from src.infrastructure.settings import cors_settings
 from src.ioc.container import create_container
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
@@ -55,6 +57,14 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
     app = FastAPI(title="CryptoWallet API", version="1.0.0", lifespan=lifespan)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_settings.origins_list,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 

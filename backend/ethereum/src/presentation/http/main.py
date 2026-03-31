@@ -13,6 +13,7 @@ from starlette.middleware.cors import CORSMiddleware
 from src.domain.exceptions import DomainException
 from src.infrastructure.log_config import setup_logging
 from src.infrastructure.message_broker.broker_instance import broker
+from src.infrastructure.settings import cors_settings
 from src.ioc.container import create_container
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
@@ -53,7 +54,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+        allow_origins=cors_settings.origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

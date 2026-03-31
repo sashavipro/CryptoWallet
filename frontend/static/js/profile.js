@@ -286,21 +286,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // Получаем UUID актива (ETH) из бэкенда
     async function loadAssetId() {
         try {
+            console.log("Отправляем запрос на /api/v1/assets...");
             const res = await fetch('/api/v1/assets');
+            console.log("Статус ответа сервера:", res.status);
+
             if (res.ok) {
                 const assets = await res.json();
+                console.log("Данные, пришедшие с сервера:", assets);
+
                 const eth = assets.find(a => a.ticker === 'ETH');
                 if (eth) {
                     ethAssetId = eth.id;
-                    console.log("Актив ETH найден:", ethAssetId);
+                    console.log("ID актива ETH успешно найден и сохранен:", ethAssetId);
                 } else {
-                    console.error("Актив ETH не найден в базе данных!");
+                    console.error("Сервер вернул данные, но тикера 'ETH' там нет!");
                 }
             } else {
-                console.error("Не удалось получить список активов. Статус:", res.status);
+                console.error("Ошибка API. Сервер ответил статусом:", res.status, await res.text());
             }
         } catch (e) {
-            console.error("Ошибка при запросе /api/v1/assets:", e);
+            console.error("Ошибка сети (возможно, API недоступно или блочит CORS):", e);
         }
     }
 
