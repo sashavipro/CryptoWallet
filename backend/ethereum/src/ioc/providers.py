@@ -47,7 +47,9 @@ from src.infrastructure.persistence.database.gateways import (
 )
 from src.infrastructure.providers.etherscan import EtherscanProviderImpl
 from src.infrastructure.providers.faucet import FaucetProviderImpl
+from src.infrastructure.providers.jwt_provider import JwtProvider
 from src.infrastructure.providers.web3 import Web3ProviderImpl
+from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
 from src.infrastructure.settings import RabbitMQSettings
 from src.infrastructure.settings import RedisSettings
@@ -83,6 +85,11 @@ class InfrastructureProvider(Provider):
     scope = Scope.APP
 
     @provide
+    def provide_auth_settings(self) -> AuthSettings:
+        """Provide the Auth settings for JWT."""
+        return AuthSettings()
+
+    @provide
     def provide_db_settings(self) -> DatabaseSettings:
         """Provide the database settings."""
         return settings
@@ -114,6 +121,8 @@ class InfrastructureProvider(Provider):
     nonce_manager = provide(RedisNonceManager, provides=NonceManager)
     balance_cache = provide(RedisBalanceCache, provides=BalanceCache)
     event_publisher = provide(TaskiqEventPublisherImpl, provides=EventPublisher)
+
+    jwt_provider = provide(JwtProvider)
 
     @provide
     async def provide_redis(self, settings: RedisSettings) -> AsyncIterable[Redis]:

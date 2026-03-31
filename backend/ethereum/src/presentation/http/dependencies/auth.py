@@ -3,45 +3,60 @@
 import uuid
 from typing import Annotated
 
-import jwt
+from dishka.integrations.fastapi import FromDishka
+from dishka.integrations.fastapi import inject
 from fastapi import Depends
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi import status
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 
-from src.infrastructure.settings import AuthSettings
+from src.infrastructure.providers.jwt_provider import JwtProvider
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_current_user_id(request: Request) -> uuid.UUID:
-    """Extract and verify real user ID from JWT using Public Key."""
-    token = request.cookies.get("access_token")
+@inject
+async def get_current_user_id(
+    request: Request,
+    jwt_provider: FromDishka[JwtProvider],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ] = None,
+) -> uuid.UUID:
+    """Retrieve and validate JWT tokens from Authorization header or cookies.
+
+    Returns the current user's UUID.
+    """
+    token = credentials.credentials if credentials else None
 
     if not token:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            token = auth_header.split(" ")[1]
+        token = request.cookies.get("access_token")
 
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Не авторизован",  # noqa: RUF001
+            detail="Authentication credentials were not provided.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    auth_settings = AuthSettings()
     try:
-        public_key = auth_settings.PUBLIC_KEY_PATH.read_text()
-        payload = jwt.decode(token, public_key, algorithms=[auth_settings.ALGORITHM])
-        return uuid.UUID(payload["sub"])
-    except jwt.ExpiredSignatureError as e:
+        payload = jwt_provider.verify(token)
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Время действия токена истекло",
+            detail=f"Invalid or expired token: {e!s}",
+            headers={"WWW-Authenticate": "Bearer"},
         ) from e
-    except Exception as e:
+
+    user_id_str = payload.get("sub")
+
+    if not user_id_str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Недействительный токен",
-        ) from e
+            detail="Token payload missing 'sub' (user ID)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-
-CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
+    return uuid.UUID(user_id_str)
