@@ -165,14 +165,15 @@ services:
 
   nginx:
       image: nginx:alpine
-      container_name: crypto_nginx
+      container_name: crypto_gateway
       ports:
         - "80:80"
       volumes:
-        - ./nginx.conf:/etc/nginx/nginx.conf:ro
+        - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       depends_on:
         - api
         - ethereum_api
+      restart: unless-stopped
 
 volumes:
   postgres_data:

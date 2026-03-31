@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 3. УПРАВЛЕНИЕ КОШЕЛЬКАМИ И СТАТИСТИКА
     // ==========================================
 
-async function loadWallets() {
+    async function loadWallets() {
         try {
             const res = await fetch('/api/v1/wallets');
 
@@ -244,8 +244,7 @@ async function loadWallets() {
                 }
 
                 wallets.forEach(wallet => {
-                    // Используем безопасное отображение баланса, если он отсутствует, пишем 0
-                    const balance = wallet.balance !== undefined ? parseFloat(wallet.balance).toFixed(4) : '0.0000';
+                    const balance = wallet.balance !== undefined && wallet.balance !== null ? parseFloat(wallet.balance).toFixed(4) : '0.0000';
                     walletsList.innerHTML += `
                         <div class="wallet-item" style="display: flex; align-items: center; width: 100%; gap: 10px;">
                             <span style="font-size: 18px; color: #3498db;">⟠</span>
@@ -284,7 +283,7 @@ async function loadWallets() {
         }
     };
 
-// Получаем UUID актива (ETH) из бэкенда
+    // Получаем UUID актива (ETH) из бэкенда
     async function loadAssetId() {
         try {
             const res = await fetch('/api/v1/assets');
@@ -293,24 +292,30 @@ async function loadWallets() {
                 const eth = assets.find(a => a.ticker === 'ETH');
                 if (eth) {
                     ethAssetId = eth.id;
+                    console.log("Актив ETH найден:", ethAssetId);
+                } else {
+                    console.error("Актив ETH не найден в базе данных!");
                 }
+            } else {
+                console.error("Не удалось получить список активов. Статус:", res.status);
             }
         } catch (e) {
-            console.warn("API активов пока недоступно. Нужно настроить Nginx и добавить актив в БД.");
+            console.error("Ошибка при запросе /api/v1/assets:", e);
         }
     }
 
     // Создание нового кошелька
     btnCreateWallet.addEventListener('click', async () => {
         if (!ethAssetId) {
-            showAlert('Системная ошибка: Актив ETH не найден в базе данных.', true);
+            showAlert('Системная ошибка: Актив ETH не загружен.', true);
             return;
         }
         try {
-            const res = await fetch('/api/v1/wallets', {
+            // ВАЖНО: Мы отправляем asset_id в URL, так как в роутере у тебя параметр `asset_id: uuid.UUID`
+            // (он по умолчанию воспринимается как query-параметр FastAPI, если не указано иное).
+            const res = await fetch(`/api/v1/wallets?asset_id=${ethAssetId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ asset_id: ethAssetId })
+                headers: { 'Content-Type': 'application/json' }
             });
 
             if (checkUnauthorized(res)) return;
@@ -320,7 +325,7 @@ async function loadWallets() {
                 loadWallets();
             } else {
                 const data = await res.json();
-                showAlert(`Ошибка: ${data.detail}`, true);
+                showAlert(`Ошибка: ${data.detail || 'Неизвестная ошибка'}`, true);
             }
         } catch (e) {
             showAlert('Ошибка сети при создании кошелька', true);
@@ -335,16 +340,23 @@ async function loadWallets() {
             return;
         }
         if (!ethAssetId) {
-            showAlert('Системная ошибка: Актив ETH не найден в базе данных.', true);
+            showAlert('Системная ошибка: Актив ETH не загружен.', true);
             return;
         }
         try {
+            // ВАЖНО: Мы отправляем только asset_id и private_key в теле JSON.
+            // user_id не нужен, так как FastAPI берет его из Depends(get_current_user_id)
             const res = await fetch('/api/v1/wallets/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ asset_id: ethAssetId, private_key: privateKey })
+                body: JSON.stringify({
+                    asset_id: ethAssetId,
+                    private_key: privateKey
+                })
             });
+
             if (checkUnauthorized(res)) return;
+
             if (res.ok) {
                 showAlert('Кошелек успешно импортирован!');
                 privateKeyInput.value = '';
@@ -352,7 +364,7 @@ async function loadWallets() {
                 loadWallets();
             } else {
                 const data = await res.json();
-                showAlert(`Ошибка импорта: ${data.detail}`, true);
+                showAlert(`Ошибка импорта: ${data.detail || 'Неизвестная ошибка'}`, true);
             }
         } catch (e) {
             showAlert('Ошибка сети при импорте', true);
@@ -365,7 +377,6 @@ async function loadWallets() {
             const res = await fetch('/api/v1/profile/me/stats');
             if (res.ok) {
                 const stats = await res.json();
-                // Поле зависит от того, как вы назовете его в DTO (messages_count или total_messages)
                 if (stats.messages_count !== undefined) {
                     statMessages.textContent = stats.messages_count;
                 }
