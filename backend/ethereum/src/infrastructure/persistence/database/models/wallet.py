@@ -8,7 +8,6 @@ from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import Numeric
 from sqlalchemy import String
-from sqlalchemy import UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
@@ -39,7 +38,3 @@ class Wallet(Base):
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[CreatedAt]
-
-    __table_args__ = (
-        UniqueConstraint("user_id", "asset_id", name="uq_wallet_user_asset"),
-    )

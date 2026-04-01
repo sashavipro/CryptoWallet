@@ -13,6 +13,7 @@ from src.application.dtos.request import ImportWalletRequest
 from src.application.dtos.response import WalletBalanceResponse
 from src.application.dtos.response import WalletResponse
 from src.application.interactors.wallet import CreateWalletInteractor
+from src.application.interactors.wallet import DeleteWalletInteractor
 from src.application.interactors.wallet import GetBalanceInteractor
 from src.application.interactors.wallet import GetWalletsInteractor
 from src.application.interactors.wallet import ImportWalletInteractor
@@ -104,6 +105,21 @@ async def get_wallet_balance(
     interactor: FromDishka[GetBalanceInteractor],
 ) -> WalletBalanceResponse:
     """Get the balance of a specific wallet."""
-    # (Здесь в идеале интерактор должен проверять,
-    # принадлежит ли wallet_id этому user_id)
     return await interactor(wallet_id)
+
+
+@router.delete(
+    "/{wallet_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=create_error_responses(WalletNotFoundException),
+    summary="Delete Wallet",
+    description="Delete a specific crypto wallet for the current user.",
+)
+@inject
+async def delete_wallet(
+    wallet_id: uuid.UUID,
+    user_id: CurrentUserId,
+    interactor: FromDishka[DeleteWalletInteractor],
+) -> None:
+    """Delete a user's wallet."""
+    await interactor(wallet_id=wallet_id, user_id=user_id)

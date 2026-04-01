@@ -34,3 +34,7 @@ class WalletGateway(Protocol):
     async def update_wallet(self, wallet: Wallet) -> Wallet:
         """Update existing wallet records (e.g., balance updates)."""
         ...
+
+    async def delete_wallet(self, wallet_id: uuid.UUID) -> None:
+        """Delete a wallet from the database by its ID."""
+        ...

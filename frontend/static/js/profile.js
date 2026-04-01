@@ -244,13 +244,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 wallets.forEach(wallet => {
-                    const balance = wallet.balance !== undefined && wallet.balance !== null ? parseFloat(wallet.balance).toFixed(4) : '0.0000';
                     walletsList.innerHTML += `
                         <div class="wallet-item" style="display: flex; align-items: center; width: 100%; gap: 10px;">
                             <span style="font-size: 18px; color: #3498db;">⟠</span>
-                            <strong style="font-size: 13px;">${wallet.address}</strong>
-                            <span style="margin-left: auto; color: #555; font-weight: bold;">${balance} ETH</span>
-                            <button class="btn-action" style="padding: 5px 10px; font-size: 12px;" onclick="requestTestEth('${wallet.id}')">Get Test ETH</button>
+                            <a href="https://sepolia.etherscan.io/address/${wallet.address}" target="_blank" style="font-size: 13px; text-decoration: none; color: #3498db; font-family: monospace; font-weight: bold;">
+                                ${wallet.address}
+                            </a>
+                            <button class="btn-action" style="margin-left: auto; background-color: #e74c3c; padding: 5px 10px; font-size: 12px; border: none; border-radius: 4px; color: white; cursor: pointer;" onclick="deleteWallet('${wallet.id}')">Удалить</button>
                         </div>
                     `;
                 });
@@ -261,25 +261,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Глобальная функция для вызова из HTML (onclick)
-    window.requestTestEth = async (walletId) => {
+    // Глобальная функция для удаления кошелька
+    window.deleteWallet = async (walletId) => {
+        if (!confirm('Вы уверены, что хотите удалить этот кошелек?')) return;
+
         try {
-            showAlert('Отправка запроса в Faucet...');
-            const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, {
-                method: 'POST'
+            const res = await fetch(`/api/v1/wallets/${walletId}`, {
+                method: 'DELETE'
             });
 
             if (checkUnauthorized(res)) return;
 
             if (res.ok) {
-                showAlert('Транзакция отправлена! Баланс скоро обновится.');
-                setTimeout(loadWallets, 5000); // Обновляем баланс через 5 секунд
+                showAlert('Кошелек успешно удален!');
+                loadWallets(); // Перезагружаем список
             } else {
                 const data = await res.json();
-                showAlert(`Ошибка Faucet: ${data.detail}`, true);
+                showAlert(`Ошибка: ${data.detail || 'Не удалось удалить кошелек'}`, true);
             }
         } catch (e) {
-            showAlert('Ошибка сети при запросе тестового ETH', true);
+            showAlert('Ошибка сети при удалении кошелька', true);
         }
     };
 
@@ -316,11 +317,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            // ВАЖНО: Мы отправляем asset_id в URL, так как в роутере у тебя параметр `asset_id: uuid.UUID`
-            // (он по умолчанию воспринимается как query-параметр FastAPI, если не указано иное).
-            const res = await fetch(`/api/v1/wallets?asset_id=${ethAssetId}`, {
+            // Отправляем asset_id в теле запроса (body) в формате JSON
+            const res = await fetch(`/api/v1/wallets`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    asset_id: ethAssetId
+                })
             });
 
             if (checkUnauthorized(res)) return;
@@ -330,9 +333,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadWallets();
             } else {
                 const data = await res.json();
-                showAlert(`Ошибка: ${data.detail || 'Неизвестная ошибка'}`, true);
+                console.error("Ответ бэкенда с ошибкой:", data); // Вывод в консоль разработчика для дебага
+
+                let errorMsg = "Неизвестная ошибка";
+                if (data.detail) {
+                    if (typeof data.detail === "string") {
+                        errorMsg = data.detail; // Обычная текстовая ошибка
+                    } else if (Array.isArray(data.detail)) {
+                        errorMsg = data.detail[0].msg || JSON.stringify(data.detail); // Ошибка валидации 422
+                    } else {
+                        // Кастомный объект ошибки (например, уже есть кошелек)
+                        errorMsg = data.detail.message || data.detail.error || JSON.stringify(data.detail);
+                    }
+                } else {
+                    errorMsg = JSON.stringify(data); // Если структуры detail нет вообще
+                }
+
+                showAlert(`Ошибка: ${errorMsg}`, true);
             }
         } catch (e) {
+            console.error("Сетевая ошибка:", e);
             showAlert('Ошибка сети при создании кошелька', true);
         }
     });

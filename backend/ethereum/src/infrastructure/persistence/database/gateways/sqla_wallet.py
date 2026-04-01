@@ -3,6 +3,7 @@
 import logging
 import uuid
 
+from sqlalchemy import delete
 from sqlalchemy import func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,3 +84,10 @@ class WalletGateway:
         db_wallets = result.scalars().all()
 
         return [map_wallet_to_domain(w) for w in db_wallets]
+
+    async def delete_wallet(self, wallet_id: uuid.UUID) -> None:
+        """Delete a wallet from the database by its ID."""
+        query = delete(DBWallet).where(DBWallet.id == wallet_id)
+        await self.session.execute(query)
+        await self.session.flush()
+        logger.info("Wallet deleted: %s", wallet_id)

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.application.interactors import CreatePendingTransactionInteractor
 from src.application.interactors import CreateWalletInteractor
+from src.application.interactors import DeleteWalletInteractor
 from src.application.interactors import GetBalanceInteractor
 from src.application.interactors import GetTransactionsInteractor
 from src.application.interactors import GetWalletsInteractor
@@ -176,6 +177,7 @@ class InteractorProvider(Provider):
 
     create_wallet_interactor = provide(CreateWalletInteractor)
     import_wallet_interactor = provide(ImportWalletInteractor)
+    delete_wallet_interactor = provide(DeleteWalletInteractor)
     get_wallets_interactor = provide(GetWalletsInteractor)
     get_balance_interactor = provide(GetBalanceInteractor)
 

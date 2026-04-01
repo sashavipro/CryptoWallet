@@ -17,7 +17,6 @@ from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import TimeProvider
 from src.domain.entities.wallet import Wallet
 from src.domain.exceptions import AssetNotFoundException
-from src.domain.exceptions import WalletAlreadyExistsException
 from src.domain.exceptions import WalletNotFoundException
 from src.domain.value_objects.shared import EthereumAddress
 from src.domain.value_objects.wallet import EncryptedPrivateKey
@@ -59,13 +58,6 @@ class CreateWalletInteractor:
         asset = await self.asset_gateway.get_asset_by_id(request.asset_id)
         if not asset:
             raise AssetNotFoundException
-
-        existing_wallet = await self.wallet_gateway.get_wallet_by_user_and_asset(
-            user_id=request.user_id, asset_id=request.asset_id
-        )
-        if existing_wallet:
-            logger.warning("Wallet already exists for user %s", request.user_id)
-            raise WalletAlreadyExistsException
 
         account_data = self.web3_provider.create_account()
 
@@ -133,13 +125,6 @@ class ImportWalletInteractor:
         asset = await self.asset_gateway.get_asset_by_id(request.asset_id)
         if not asset:
             raise AssetNotFoundException
-
-        existing_wallet = await self.wallet_gateway.get_wallet_by_user_and_asset(
-            user_id=request.user_id, asset_id=request.asset_id
-        )
-        if existing_wallet:
-            logger.warning("Wallet already exists for user %s", request.user_id)
-            raise WalletAlreadyExistsException
 
         raw_key = RawPrivateKey(request.private_key)
 
@@ -263,3 +248,21 @@ class GetBalanceInteractor:
             balance=updated_db_wallet.balance,
             balance_updated_at=updated_db_wallet.balance_updated_at,
         )
+
+
+class DeleteWalletInteractor:
+    """Use case for deleting a wallet."""
+
+    def __init__(self, wallet_gateway: WalletGateway, uow: UnitOfWork) -> None:
+        """Initialize the interactor with required gateways."""
+        self.wallet_gateway = wallet_gateway
+        self.uow = uow
+
+    async def __call__(self, wallet_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Execute the use case to delete a wallet."""
+        wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
+        if not wallet or wallet.user_id != user_id:
+            raise WalletNotFoundException
+
+        async with self.uow:
+            await self.wallet_gateway.delete_wallet(wallet)
