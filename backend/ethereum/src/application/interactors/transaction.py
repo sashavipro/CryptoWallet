@@ -144,23 +144,58 @@ class CreatePendingTransactionInteractor:
 
 
 class GetTransactionsInteractor:
-    """Use case for retrieving transaction history from Etherscan."""
+    """Use case for retrieving transaction history from Etherscan and Local DB."""
 
     def __init__(
         self,
         wallet_gateway: WalletGateway,
+        transaction_gateway: TransactionGateway,
         etherscan_provider: EtherscanProvider,
     ) -> None:
-        """Initialize with required ports."""
+        """Initialize the interactor with gateways and providers."""
         self.wallet_gateway = wallet_gateway
+        self.transaction_gateway = transaction_gateway
         self.etherscan_provider = etherscan_provider
 
     async def __call__(self, wallet_id: uuid.UUID) -> list[dict[str, Any]]:
-        """Execute the workflow to get transaction history from Etherscan."""
-        logger.info("Retrieving Etherscan transactions for wallet: %s", wallet_id)
+        """Execute the use case to retrieve wallet transactions."""
+        logger.info("Retrieving transactions for wallet: %s", wallet_id)
 
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
         if not wallet:
             raise WalletNotFoundException
 
-        return await self.etherscan_provider.get_wallet_transactions(wallet.address)
+        try:
+            es_txs = await self.etherscan_provider.get_wallet_transactions(
+                wallet.address
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Failed to fetch from Etherscan for wallet %s: %s",
+                wallet_id,
+                e,
+            )
+            es_txs = []
+
+        db_txs = await self.transaction_gateway.get_transactions_by_wallet_id(wallet_id)
+
+        merged_txs = {}
+
+        for tx in es_txs:
+            tx_hash = tx.get("hash", "").lower()
+            merged_txs[tx_hash] = tx
+
+        for tx in db_txs:
+            tx_hash = tx.tx_hash.lower()
+            if tx_hash not in merged_txs:
+                merged_txs[tx_hash] = {
+                    "hash": tx.tx_hash,
+                    "from": tx.from_address,
+                    "to": tx.to_address,
+                    "value": str(tx.value),
+                    "tx_fee": str(tx.tx_fee),
+                    "status": tx.status.value.lower(),
+                    "gasUsed": None,
+                }
+
+        return list(merged_txs.values())

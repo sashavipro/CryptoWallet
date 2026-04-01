@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Wallets - Crypto Wallet{% endblock %}
+
+{% block extra_css %}
+<style>
+    .wallets-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        gap: 20px;
+    }
+
+    .wallet-card {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .wallet-header {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .eth-logo {
+        width: 40px;
+        height: 40px;
+    }
+
+    .wallet-info {
+        flex: 1;
+    }
+
+    .wallet-label {
+        font-size: 12px;
+        color: #777;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+    }
+
+    .wallet-address {
+        font-family: monospace;
+        font-size: 14px;
+        color: #3498db;
+        text-decoration: none;
+        word-break: break-all;
+    }
+
+    .wallet-balance {
+        font-size: 20px;
+        font-weight: bold;
+        margin-top: 5px;
+    }
+
+    .wallet-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: auto;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+    }
+
+    .btn-wallet {
+        flex: 1;
+        padding: 8px;
+        border: none;
+        border-radius: 4px;
+        font-size: 11px;
+        cursor: pointer;
+        color: white;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .btn-watch { background-color: #2980b9; }
+    .btn-send { background-color: #7bc143; }
+    .btn-faucet { background-color: #f39c12; }
+
+    /* Модальные окна */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: #fff; padding: 20px; border-radius: 4px; width: 500px; position: relative; }
+    .modal-lg { width: 800px; max-height: 90vh; display: flex; flex-direction: column;}
+    .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+    .modal-close { cursor: pointer; font-size: 18px; border: none; background: none; }
+
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace;}
+    .btn-submit-tx { background: #5cb85c; color: white; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; font-weight: bold; }
+
+    /* Таблица транзакций */
+    .tx-table-container { overflow-y: auto; flex: 1; }
+    .tx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .tx-table th, .tx-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+    .tx-table th { background: #f9f9f9; position: sticky; top: 0; }
+    .tx-hash, .tx-addr { font-family: monospace; color: #3498db; text-decoration: none; }
+    .status-success { color: #27ae60; font-weight: bold; }
+    .status-failed { color: #e74c3c; font-weight: bold; }
+    .status-pending { color: #f39c12; font-weight: bold; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="section-title" style="margin-bottom: 20px; font-size: 24px;">Кошельки</div>
+
+<div id="globalAlert" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 3px; text-align: center;"></div>
+
+<div class="wallets-container" id="walletsContainer">
+    <div style="color: #888;">Загрузка кошельков...</div>
+</div>
+
+<div class="modal-overlay" id="sendTxModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h4>Отправка ETH</h4>
+            <button class="modal-close" onclick="closeModal('sendTxModal')">✕</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="sendFromWalletId">
+            <div class="form-group">
+                <label>Send To (Address):</label>
+                <input type="text" id="sendToAddress" placeholder="0x...">
+            </div>
+            <div class="form-group">
+                <label>Value (ETH):</label>
+                <input type="number" id="sendValue" step="0.0001" placeholder="0.00">
+            </div>
+            <button class="btn-submit-tx" id="btnSendTx">Send</button>
+            <div id="sendTxResult" style="margin-top: 15px; font-size: 13px; display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="txHistoryModal">
+    <div class="modal modal-lg">
+        <div class="modal-header">
+            <h4 id="txHistoryTitle">Список транзакций</h4>
+            <button class="modal-close" onclick="closeModal('txHistoryModal')">✕</button>
+        </div>
+        <div class="tx-table-container">
+            <table class="tx-table">
+                <thead>
+                    <tr>
+                        <th>Tx Hash</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Value</th>
+                        <th>Tx Fee</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="txTableBody">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/wallets.js"></script>
+{% endblock %}

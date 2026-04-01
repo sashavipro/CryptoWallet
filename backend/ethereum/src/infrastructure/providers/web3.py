@@ -55,8 +55,8 @@ class Web3ProviderImpl(Web3Provider):
                     )
 
                 w3 = AsyncWeb3(provider)
-                w3.middleware_onion.inject(AttributeDictMiddleware)
-                w3.middleware_onion.inject(PythonicMiddleware)
+                w3.middleware_onion.inject(AttributeDictMiddleware, layer=0)
+                w3.middleware_onion.inject(PythonicMiddleware, layer=0)
 
                 if await w3.is_connected():
                     logger.debug("Successfully connected to Web3 Node: %s", url)
@@ -163,17 +163,19 @@ class Web3ProviderImpl(Web3Provider):
 
         signed_transaction = Account.sign_transaction(transaction, raw_private_key)
         tx_hash = await self.w3.eth.send_raw_transaction(
-            signed_transaction.rawTransaction
+            signed_transaction.raw_transaction
         )
+
+        formatted_hash = self.w3.to_hex(tx_hash)
 
         logger.info(
             "EIP-1559 Transaction sent from %s to %s for %s ETH. Hash: %s",
             from_address.value,
             to_address.value,
             value,
-            tx_hash.hex(),
+            formatted_hash,
         )
-        return tx_hash.hex()
+        return formatted_hash
 
     async def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any] | None:
         """Check the status of a transaction on the blockchain."""

@@ -1,6 +1,7 @@
 """ethereum/src/infrastructure/persistence/database/gateways/sqla_transaction.py."""
 
 import logging
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,3 +57,17 @@ class TransactionGateway:
         await self.session.flush()
         logger.debug("Transaction updated: %s", transaction.tx_hash)
         return map_transaction_to_domain(merged_tx)
+
+    async def get_transactions_by_wallet_id(
+        self, wallet_id: uuid.UUID
+    ) -> list[DomainTransaction]:
+        """Retrieve all transactions for a specific wallet from the database."""
+        query = (
+            select(DBTransaction)
+            .where(DBTransaction.wallet_id == wallet_id)
+            .order_by(DBTransaction.created_at.desc())
+        )
+        result = await self.session.execute(query)
+        db_txs = result.scalars().all()
+
+        return [map_transaction_to_domain(tx) for tx in db_txs]

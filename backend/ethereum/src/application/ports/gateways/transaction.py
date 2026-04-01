@@ -1,5 +1,6 @@
 """ethereum/src/application/ports/gateways/transaction.py."""
 
+import uuid
 from typing import Protocol
 
 from src.domain.entities import Transaction
@@ -18,4 +19,10 @@ class TransactionGateway(Protocol):
 
     async def update_transaction(self, transaction: Transaction) -> Transaction:
         """Update existing transaction records."""
+        ...
+
+    async def get_transactions_by_wallet_id(
+        self, wallet_id: uuid.UUID
+    ) -> list[Transaction]:
+        """Retrieve all transactions for a specific wallet."""
         ...

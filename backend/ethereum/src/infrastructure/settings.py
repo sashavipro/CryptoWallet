@@ -82,7 +82,7 @@ class Web3Settings(BaseSettings):
     # Настройки для Фаусета (мастер-кошелька)
     FAUCET_PRIVATE_KEY_ENCRYPTED: str
     FAUCET_MASTER_ADDRESS: str
-    FAUCET_AMOUNT_ETH: float = 0.01
+    FAUCET_AMOUNT_ETH: float = 0.001
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
