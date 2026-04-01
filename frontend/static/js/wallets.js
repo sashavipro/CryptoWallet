@@ -1,8 +1,12 @@
-// Глобальная переменная для хранения кошельков
+// Глобальные переменные
 let currentWallets = [];
+let balancePollInterval = null; // Переменная для таймера AJAX-запросов
 
 document.addEventListener('DOMContentLoaded', () => {
     loadWallets();
+
+    // Запускаем фоновое обновление балансов каждые 10 секунд
+    balancePollInterval = setInterval(updateBalances, 10000);
 
     // Обработчик отправки транзакции
     const btnSend = document.getElementById('btnSendTx');
@@ -42,14 +46,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (res.ok) {
                 resultDiv.innerHTML = `
-                    <span style="color: #27ae60; font-weight: bold;">Отправка произведена.</span><br>
-                    <a href="https://sepolia.etherscan.io/tx/${data.tx_hash}" target="_blank" style="color: #3498db;">Ссылка на транзакцию</a>
+                    <span style="color: #27ae60; font-weight: bold;">Отправка произведена. Ожидайте подтверждения сети...</span><br>
+                    <a href="https://sepolia.etherscan.io/tx/${data.tx_hash || data.hash}" target="_blank" style="color: #3498db;">Ссылка на транзакцию</a>
                 `;
                 document.getElementById('sendToAddress').value = '';
                 document.getElementById('sendValue').value = '';
-                setTimeout(loadWallets, 30000);
+
+                // Форсируем обновление балансов через 5 и 10 секунд после успешной отправки
+                setTimeout(updateBalances, 5000);
+                setTimeout(updateBalances, 10000);
             } else {
-                // 422 ошибки от FastAPI
                 let errorMsg = "Неизвестная ошибка";
                 if (data.detail) {
                     errorMsg = Array.isArray(data.detail) ? data.detail[0].msg : data.detail;
@@ -63,6 +69,40 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// --- ФОНОВОЕ ОБНОВЛЕНИЕ БАЛАНСОВ (AJAX) ---
+async function updateBalances() {
+    if (!currentWallets || currentWallets.length === 0) return;
+
+    currentWallets.forEach(async (wallet) => {
+        try {
+            const balRes = await fetch(`/api/v1/wallets/${wallet.id}/balance`);
+            if (balRes.ok) {
+                const balData = await balRes.json();
+                const balanceSpan = document.getElementById(`balance-${wallet.id}`);
+
+                if (balanceSpan) {
+                    const currentText = balanceSpan.textContent;
+                    const newText = parseFloat(balData.balance).toFixed(4);
+
+                    // Если баланс изменился (и это не первичная загрузка), делаем красивую зеленую подсветку
+                    if (currentText !== newText && currentText !== 'Загрузка...') {
+                        balanceSpan.style.color = '#27ae60';
+                        balanceSpan.style.fontWeight = 'bold';
+                        setTimeout(() => {
+                            balanceSpan.style.color = '';
+                            balanceSpan.style.fontWeight = 'normal';
+                        }, 2000);
+                    }
+
+                    balanceSpan.textContent = newText;
+                }
+            }
+        } catch (e) {
+            console.error(`Ошибка фонового обновления баланса для ${wallet.id}`, e);
+        }
+    });
+}
 
 // Загрузка кошельков
 async function loadWallets() {
@@ -87,14 +127,13 @@ async function loadWallets() {
             currentWallets.forEach(wallet => {
                 const card = document.createElement('div');
                 card.className = 'wallet-card';
-                // ИСПРАВЛЕНИЕ 1: Оставляем спан "Загрузка..." для баланса
                 card.innerHTML = `
                     <div class="wallet-header">
                         <div style="font-size: 30px; color: #627eea;">⟠</div>
                         <div class="wallet-info">
                             <div class="wallet-label">Адрес:</div>
                             <a href="https://sepolia.etherscan.io/address/${wallet.address}" target="_blank" class="wallet-address">${wallet.address}</a>
-                            <div class="wallet-balance"><span id="balance-${wallet.id}">Загрузка...</span> ETH</div>
+                            <div class="wallet-balance"><span id="balance-${wallet.id}" style="transition: color 0.3s;">Загрузка...</span> ETH</div>
                         </div>
                     </div>
                     <div class="wallet-actions">
@@ -106,20 +145,8 @@ async function loadWallets() {
                 container.appendChild(card);
             });
 
-            // Асинхронно запрашиваем реальный баланс для каждого кошелька
-            currentWallets.forEach(async (wallet) => {
-                try {
-                    const balRes = await fetch(`/api/v1/wallets/${wallet.id}/balance`);
-                    if (balRes.ok) {
-                        const balData = await balRes.json();
-                        document.getElementById(`balance-${wallet.id}`).textContent = parseFloat(balData.balance).toFixed(4);
-                    } else {
-                        document.getElementById(`balance-${wallet.id}`).textContent = "Ошибка";
-                    }
-                } catch (e) {
-                    document.getElementById(`balance-${wallet.id}`).textContent = "Ошибка";
-                }
-            });
+            // Сразу же запрашиваем балансы первый раз после отрисовки карточек
+            updateBalances();
         }
     } catch (e) {
         container.innerHTML = '<div style="color: red;">Ошибка загрузки кошельков.</div>';
@@ -135,11 +162,10 @@ window.openSendModal = (walletId) => {
 
 // Запрос в фаусет
 window.requestFaucet = async (walletId) => {
-    showGlobalAlert('Запрос отправлен в Faucet. Ожидайте...', false);
+    showGlobalAlert('Запрос отправлен в Faucet. Ожидайте подтверждения...', false);
     try {
         const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, { method: 'POST' });
 
-        // Проверяем, вернул ли сервер JSON, чтобы не было ошибки парсинга при 500 ошибках
         const contentType = res.headers.get("content-type");
         let data = null;
         if (contentType && contentType.includes("application/json")) {
@@ -147,8 +173,13 @@ window.requestFaucet = async (walletId) => {
         }
 
         if (res.ok) {
-            showGlobalAlert('ETH успешно запрошен! Баланс скоро обновится.');
-            setTimeout(loadWallets, 5000);
+            showGlobalAlert('ETH успешно запрошен! Баланс обновится автоматически в течение минуты.');
+
+            // Запускаем серию проверок баланса через интервалы,
+            // чтобы поймать момент подтверждения транзакции в блокчейне
+            setTimeout(updateBalances, 5000);  // через 5 секунд
+            setTimeout(updateBalances, 15000); // через 15 секунд
+            setTimeout(updateBalances, 30000); // через 30 секунд
         } else {
             let errorMsg = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Ошибка сервера (Код ${res.status})`;
             showGlobalAlert(`Ошибка Faucet: ${errorMsg}`, true);
@@ -178,15 +209,15 @@ window.openTxHistory = async (walletId, address) => {
             }
 
             txs.forEach(tx => {
-                const isError = tx.isError === "1" || tx.status === "failed";
-                const isPending = tx.status === "pending";
+                const isError = tx.isError === "1" || tx.status === "failed" || tx.status === "FAILED";
+                const isPending = tx.status === "pending" || tx.status === "PENDING";
 
                 let statusHtml = '<span class="status-success" style="color: #27ae60; font-weight: bold;">Success</span>';
                 if (isError) statusHtml = '<span class="status-failed" style="color: #e74c3c; font-weight: bold;">Failed</span>';
                 if (isPending) statusHtml = '<span class="status-pending" style="color: #f39c12; font-weight: bold;">Pending</span>';
 
                 let valEth = tx.value;
-                if (valEth && valEth.length > 10) {
+                if (valEth && valEth.toString().length > 10) {
                     valEth = (parseFloat(valEth) / 1e18).toFixed(4);
                 }
 
@@ -196,7 +227,7 @@ window.openTxHistory = async (walletId, address) => {
                         <td class="tx-addr">${(tx.from || tx.from_address).substring(0, 10)}...</td>
                         <td class="tx-addr">${(tx.to || tx.to_address).substring(0, 10)}...</td>
                         <td>${valEth} ETH</td>
-                        <td>${tx.gasUsed ? (tx.gasUsed * tx.gasPrice / 1e18).toFixed(6) : (tx.tx_fee || '0')}</td>
+                        <td>${tx.gasUsed ? (tx.gasUsed * (tx.gasPrice || 0) / 1e18).toFixed(6) : (tx.tx_fee || '0')}</td>
                         <td>${statusHtml}</td>
                     </tr>
                 `;
@@ -211,7 +242,6 @@ window.closeModal = (id) => {
     document.getElementById(id).style.display = 'none';
 };
 
-// Функция для вывода уведомлений
 function showGlobalAlert(message, isError = false) {
     const alertDiv = document.getElementById('globalAlert');
     if (!alertDiv) {
@@ -227,5 +257,5 @@ function showGlobalAlert(message, isError = false) {
     alertDiv.style.border = isError ? '1px solid #f5c6cb' : '1px solid #c3e6cb';
     alertDiv.textContent = message;
 
-    setTimeout(() => { alertDiv.style.display = 'none'; }, 5000);
+    setTimeout(() => { alertDiv.style.display = 'none'; }, 7000);
 }

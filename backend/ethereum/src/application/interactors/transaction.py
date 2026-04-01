@@ -151,14 +151,18 @@ class GetTransactionsInteractor:
         wallet_gateway: WalletGateway,
         transaction_gateway: TransactionGateway,
         etherscan_provider: EtherscanProvider,
+        web3_provider: Web3Provider,
+        uow: UnitOfWork,
     ) -> None:
-        """Initialize the interactor with gateways and providers."""
+        """Initialize with required ports."""
         self.wallet_gateway = wallet_gateway
         self.transaction_gateway = transaction_gateway
         self.etherscan_provider = etherscan_provider
+        self.web3_provider = web3_provider
+        self.uow = uow
 
     async def __call__(self, wallet_id: uuid.UUID) -> list[dict[str, Any]]:
-        """Execute the use case to retrieve wallet transactions."""
+        """Execute the workflow to get transaction history."""
         logger.info("Retrieving transactions for wallet: %s", wallet_id)
 
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
@@ -170,17 +174,32 @@ class GetTransactionsInteractor:
                 wallet.address
             )
         except Exception as e:  # noqa: BLE001
-            logger.warning(
-                "Failed to fetch from Etherscan for wallet %s: %s",
-                wallet_id,
-                e,
-            )
+            logger.warning("Failed to fetch from Etherscan: %s", e)
             es_txs = []
 
         db_txs = await self.transaction_gateway.get_transactions_by_wallet_id(wallet_id)
 
-        merged_txs = {}
+        for tx in db_txs:
+            if tx.status == TransactionStatus.PENDING:
+                receipt = await self.web3_provider.get_transaction_receipt(tx.tx_hash)
+                if receipt:
+                    is_success = receipt.get("status") == 1
 
+                    gas_used = Decimal(str(receipt.get("gasUsed", 0)))
+                    gas_price = Decimal(str(receipt.get("effectiveGasPrice", 0)))
+                    fee_eth = self.web3_provider.w3.from_wei(
+                        gas_used * gas_price, "ether"
+                    )
+
+                    if is_success:
+                        tx.mark_success(fee=fee_eth)
+                    else:
+                        tx.mark_failed()
+
+                    async with self.uow:
+                        await self.transaction_gateway.update_transaction(tx)
+
+        merged_txs = {}
         for tx in es_txs:
             tx_hash = tx.get("hash", "").lower()
             merged_txs[tx_hash] = tx
@@ -195,7 +214,6 @@ class GetTransactionsInteractor:
                     "value": str(tx.value),
                     "tx_fee": str(tx.tx_fee),
                     "status": tx.status.value.lower(),
-                    "gasUsed": None,
                 }
 
         return list(merged_txs.values())
