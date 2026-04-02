@@ -21,9 +21,13 @@ from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
 from src.presentation.http.exception_handlers import validation_exception_handler
 from src.presentation.http.exception_handlers import value_error_handler
+from src.presentation.http.routers.asset import router as asset_router
 from src.presentation.http.routers.auth import router as auth_router
+from src.presentation.http.routers.faucet import router as faucet_router
 from src.presentation.http.routers.pages import router as pages_router
 from src.presentation.http.routers.profile import router as profile_router
+from src.presentation.http.routers.transaction import router as transaction_router
+from src.presentation.http.routers.wallet import router as wallet_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -71,6 +75,10 @@ def create_app() -> FastAPI:
     app.include_router(pages_router)
     app.include_router(auth_router)
     app.include_router(profile_router)
+    app.include_router(faucet_router)
+    app.include_router(wallet_router)
+    app.include_router(transaction_router)
+    app.include_router(asset_router)
 
     app.add_exception_handler(DomainException, domain_exception_handler)
     app.add_exception_handler(ValueError, value_error_handler)

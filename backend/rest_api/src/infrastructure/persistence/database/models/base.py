@@ -1,4 +1,4 @@
-"""rest_api/src/infrastructure/persistence/database/models/base.py."""
+"""ethereum/src/infrastructure/persistence/database/models/base.py."""
 
 import datetime
 import logging
@@ -41,7 +41,7 @@ UpdatedAt = Annotated[
 
 
 class Base(AsyncAttrs, DeclarativeBase):
-    """Base class for all SQLAlchemy models.
+    """Base class for all SQLAlchemy models in the Ethereum microservice.
 
     Automatically generates __tablename__ and configures indexes.
     """
