@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/mappers/wallet.py."""
+"""rest_api/src/infrastructure/persistence/database/mappers/wallet.py."""
 
 from src.domain.entities.wallet import Wallet as DomainWallet
 from src.infrastructure.persistence.database.models.wallet import Wallet as DBWallet

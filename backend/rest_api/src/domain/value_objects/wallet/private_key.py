@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/wallet/private_key.py."""
+"""rest_api/src/domain/value_objects/wallet/private_key.py."""
 
 import re
 from dataclasses import dataclass

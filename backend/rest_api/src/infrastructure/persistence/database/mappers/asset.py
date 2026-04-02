@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/mappers/asset.py."""
+"""rest_api/src/infrastructure/persistence/database/mappers/asset.py."""
 
 from src.domain.entities.asset import Asset as DomainAsset
 from src.domain.entities.asset import AssetType

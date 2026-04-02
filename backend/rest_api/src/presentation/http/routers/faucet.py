@@ -1,4 +1,4 @@
-"""ethereum/src/presentation/http/routers/faucet.py."""
+"""rest_api/src/presentation/http/routers/faucet.py."""
 
 import uuid
 

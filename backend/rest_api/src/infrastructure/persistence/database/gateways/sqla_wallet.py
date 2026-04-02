@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/gateways/sqla_wallet.py."""
+"""rest_api/src/infrastructure/persistence/database/gateways/sqla_wallet.py."""
 
 import logging
 import uuid

@@ -6,11 +6,13 @@ import uuid
 
 import click
 
+from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.utils import PasswordHasher
+from src.domain.entities import Asset
 from src.domain.entities import User
-from src.domain.value_objects.user import RawPassword
+from src.domain.value_objects.asset.asset_type import AssetType
 from src.infrastructure.settings import SecuritySettings
 from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.ioc.container import create_container
@@ -29,44 +31,61 @@ def cli():
 @click.option("--username", default="admin", help="Superuser username")
 @click.option("--password", default="Admin12345", help="Superuser password")
 def create_superuser(email, username, password):
-    """Create a default superuser (or administrator)."""
+    """Create a default superuser in the main database."""
 
     async def _run():
         container = create_container()
-
         async with container() as request_container:
             user_gateway = await request_container.get(UserGateway)
             uow = await request_container.get(UnitOfWork)
             password_hasher = await request_container.get(PasswordHasher)
 
             if await user_gateway.get_user_by_email(email):
-                click.echo(
-                    click.style(f"User with email {email} already exists.", fg="yellow")
-                )
+                click.echo(click.style(f"User {email} already exists.", fg="yellow"))
                 return
 
-            click.echo(f"Creating superuser {username} ({email})...")
+            hashed_password = password_hasher.hash(password)
+            new_user = User(
+                id=uuid.uuid4(),
+                email=email,
+                username=username,
+                password_hash=hashed_password,
+            )
+            async with uow:
+                await user_gateway.add_user(new_user)
+            click.echo(click.style("Superuser created successfully!", fg="green"))
 
-            try:
-                valid_password = RawPassword(password)
-                hashed_password = password_hasher.hash(valid_password.value)
+    asyncio.run(_run())
 
-                new_user = User(
-                    id=uuid.uuid4(),
-                    email=email,
-                    username=username,
-                    password_hash=hashed_password,
-                    is_active=True,
-                    avatar_url=None,
-                )
 
-                async with uow:
-                    await user_gateway.add_user(new_user)
+@cli.command()
+def seed_assets():
+    """Seed initial assets (like ETH) into the rest_api database."""
 
-                click.echo(click.style("Superuser created successfully!", fg="green"))
+    async def _run():
+        container = create_container()
+        async with container() as request_container:
+            asset_gateway = await request_container.get(AssetGateway)
+            uow = await request_container.get(UnitOfWork)
 
-            except Exception as e:  # noqa: BLE001
-                click.echo(click.style(f"Failed to create superuser: {e}", fg="red"))
+            existing = await asset_gateway.get_asset_by_ticker_and_network(
+                "ETH", "sepolia"
+            )
+            if existing:
+                click.echo("Asset 'ETH' already exists. Skipping.")
+                return
+
+            new_eth = Asset(
+                id=uuid.uuid4(),
+                network="sepolia",
+                asset_type=AssetType.NATIVE,
+                name="Ethereum",
+                ticker="ETH",
+                decimals=18,
+            )
+            async with uow:
+                await asset_gateway.add_asset(new_eth)
+            click.echo(click.style("Successfully seeded asset 'ETH'", fg="green"))
 
     asyncio.run(_run())
 
@@ -74,19 +93,14 @@ def create_superuser(email, username, password):
 @cli.command()
 @click.argument("secret")
 def encrypt(secret: str):
-    """Encrypt a secret string (like a private key) using the project's AES key."""
+    """Encrypt a secret string (like a private key) for .env."""
     try:
         settings = SecuritySettings()
         encryptor = AesEncryptor(settings)
         encrypted_value = encryptor.encrypt(secret)
-
-        click.echo(click.style("Encryption successful!", fg="green"))
-        click.echo(click.style("Your encrypted key is:", fg="yellow"))
-        click.echo(click.style(encrypted_value, fg="green", bold=True))
-
+        click.echo(click.style(f"Encrypted key: {encrypted_value}", fg="green"))
     except Exception as e:  # noqa: BLE001
-        error_message = f"An error occurred: {e}"
-        click.echo(click.style(error_message, fg="red"))
+        click.echo(click.style(f"Error: {e}", fg="red"))
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/shared/balance.py."""
+"""rest_api/src/domain/value_objects/shared/balance.py."""
 
 from dataclasses import dataclass
 from decimal import Decimal

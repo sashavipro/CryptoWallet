@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/transaction/tx_hash.py."""
+"""rest_api/src/domain/value_objects/transaction/tx_hash.py."""
 
 import re
 from dataclasses import dataclass

@@ -1,4 +1,4 @@
-"""ethereum/src/application/ports/gateways/asset.py."""
+"""rest_api/src/application/ports/gateways/asset.py."""
 
 import uuid
 from typing import Protocol

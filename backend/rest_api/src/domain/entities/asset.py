@@ -1,4 +1,4 @@
-"""ethereum/src/domain/entities/asset.py."""
+"""rest_api/src/domain/entities/asset.py."""
 
 from dataclasses import dataclass
 

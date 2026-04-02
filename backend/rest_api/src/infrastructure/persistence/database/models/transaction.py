@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/models/transaction.py."""
+"""rest_api/src/infrastructure/persistence/database/models/transaction.py."""
 
 import uuid
 from decimal import Decimal

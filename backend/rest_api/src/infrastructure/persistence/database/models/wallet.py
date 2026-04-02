@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/models/wallet.py."""
+"""rest_api/src/infrastructure/persistence/database/models/wallet.py."""
 
 import datetime
 import uuid

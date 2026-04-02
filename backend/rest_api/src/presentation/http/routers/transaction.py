@@ -1,4 +1,4 @@
-"""ethereum/src/presentation/http/routers/transaction.py."""
+"""rest_api/src/presentation/http/routers/transaction.py."""
 
 import uuid
 from typing import Any

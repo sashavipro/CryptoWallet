@@ -6,12 +6,12 @@ from pathlib import Path
 from dishka import Provider
 from dishka import Scope
 from dishka import provide
-from fastapi.templating import Jinja2Templates
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
+from starlette.templating import Jinja2Templates
 
 from src.application.interactors.login import LoginUserInteractor
 from src.application.interactors.profile import ChangePasswordInteractor
@@ -28,17 +28,18 @@ from src.application.ports.gateways import PermissionGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.gateways.stats import StatsGateway
+from src.application.ports.providers import EthereumWorkerClient
+from src.application.ports.providers import FileUploader
 from src.application.ports.providers import JwtProvider as JwtProviderPort
-from src.application.ports.providers.file_provider import FileUploader
-from src.application.ports.providers.mail_provider import MailProvider
+from src.application.ports.providers import MailProvider
 from src.application.ports.utils import Encryptor
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
-from src.infrastructure.cache.rate_limiter import RedisRateLimiter
+from src.infrastructure.cache import RedisRateLimiter
 from src.infrastructure.cache.stats import RedisStatsGateway
 from src.infrastructure.cache.user_cache import CachedUserGateway
-from src.infrastructure.events.taskiq_publisher import TaskiqEventPublisher
+from src.infrastructure.message_broker.broker import broker
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
@@ -46,9 +47,10 @@ from src.infrastructure.persistence.database.gateways import SqlaUnitOfWork
 from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
-from src.infrastructure.providers.do_spaces_provider import DOSpacesUploader
-from src.infrastructure.providers.jwt_provider import JwtProvider as JwtProviderImpl
-from src.infrastructure.providers.mailjet_provider import MailjetProvider
+from src.infrastructure.providers import DOSpacesUploader
+from src.infrastructure.providers import JwtProvider
+from src.infrastructure.providers import MailjetProvider
+from src.infrastructure.providers.worker_client import EthereumWorkerClientImpl
 from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
 from src.infrastructure.settings import MailSettings
@@ -56,11 +58,11 @@ from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import S3Settings
 from src.infrastructure.settings import SecuritySettings
 from src.infrastructure.settings import auth_settings
+from src.infrastructure.settings import db_settings
 from src.infrastructure.settings import mail_settings
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import s3_settings
 from src.infrastructure.settings import security_settings
-from src.infrastructure.settings import settings as db_settings
 from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.infrastructure.utils.datetime_generator import DatetimeGenerator
 from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
@@ -115,8 +117,13 @@ class InfrastructureProvider(Provider):
         templates_dir = project_root / "frontend" / "templates"
         return Jinja2Templates(directory=str(templates_dir))
 
-    jwt_provider = provide(JwtProviderImpl, provides=JwtProviderPort)
-    event_publisher = provide(TaskiqEventPublisher, provides=EventPublisher)
+    @provide
+    def provide_worker_client(self) -> EthereumWorkerClient:
+        """Provide the Ethereum worker client implementation."""
+        return EthereumWorkerClientImpl(broker)
+
+    jwt_provider = provide(JwtProvider, provides=JwtProviderPort)
+    event_publisher = provide(EthereumWorkerClientImpl, provides=EventPublisher)
     mail_provider = provide(MailjetProvider, provides=MailProvider)
     file_uploader = provide(DOSpacesUploader, provides=FileUploader)
 

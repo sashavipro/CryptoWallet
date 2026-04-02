@@ -138,7 +138,7 @@ class CorsSettings(BaseSettings):
         ]
 
 
-settings = DatabaseSettings()
+db_settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
 security_settings = SecuritySettings()

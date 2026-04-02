@@ -92,9 +92,6 @@ class RegisterUserInteractor:
                 username=saved_user.username,
             )
 
-        # Как только мы вышли из блока `async with self.uow` без ошибок,
-        # SqlaUnitOfWork делает await self.session.commit()
-
         logger.info(
             "User registered, event published, and transaction committed: %s",
             saved_user.id,

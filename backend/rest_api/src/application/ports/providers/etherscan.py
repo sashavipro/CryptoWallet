@@ -1,4 +1,4 @@
-"""ethereum/src/application/ports/providers/etherscan.py."""
+"""rest_api/src/application/ports/providers/etherscan.py."""
 
 from typing import Any
 from typing import Protocol

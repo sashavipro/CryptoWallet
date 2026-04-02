@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/asset/asset_type.py."""
+"""rest_api/src/domain/value_objects/asset/asset_type.py."""
 
 from enum import Enum
 

@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/models/base.py."""
+"""rest_api/src/infrastructure/persistence/database/models/base.py."""
 
 import datetime
 import logging

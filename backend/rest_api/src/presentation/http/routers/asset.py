@@ -1,4 +1,4 @@
-"""ethereum/src/presentation/http/routers/asset.py."""
+"""rest_api/src/presentation/http/routers/asset.py."""
 
 from typing import Any
 

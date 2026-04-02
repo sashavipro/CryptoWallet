@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/providers/etherscan.py."""
+"""rest_api/src/infrastructure/providers/etherscan.py."""
 
 import logging
 from typing import Any

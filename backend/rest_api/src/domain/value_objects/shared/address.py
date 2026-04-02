@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/shared/address.py."""
+"""rest_api/src/domain/value_objects/shared/address.py."""
 
 import re
 from dataclasses import dataclass

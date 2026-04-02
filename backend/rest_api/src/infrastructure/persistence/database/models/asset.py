@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/models/asset.py."""
+"""rest_api/src/infrastructure/persistence/database/models/asset.py."""
 
 import uuid
 

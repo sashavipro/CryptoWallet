@@ -5,7 +5,7 @@ import sys
 
 
 def setup_logging(level: int = logging.INFO) -> None:
-    """Configure central logging for the Ethereum microservice."""
+    """Configure central logging for the Ethereum stateless worker."""
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -17,5 +17,4 @@ def setup_logging(level: int = logging.INFO) -> None:
 
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("web3").setLevel(logging.WARNING)

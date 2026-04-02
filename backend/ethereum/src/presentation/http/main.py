@@ -6,60 +6,50 @@ from contextlib import asynccontextmanager
 
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.cors import CORSMiddleware
+from faststream.rabbit.fastapi import RabbitRouter
 
-from src.domain.exceptions import DomainException
+from src.application.ports.providers.web3 import Web3Provider
 from src.infrastructure.log_config import setup_logging
-from src.infrastructure.message_broker.broker_instance import broker
-from src.infrastructure.settings import cors_settings
+from src.infrastructure.message_broker.block_subscriber import listen_to_new_blocks
+from src.infrastructure.settings import mq_settings
 from src.ioc.container import create_container
-from src.presentation.http.exception_handlers import domain_exception_handler
-from src.presentation.http.exception_handlers import http_exception_handler
-from src.presentation.http.exception_handlers import validation_exception_handler
-from src.presentation.http.exception_handlers import value_error_handler
+from src.presentation.amqp.consumers import router as amqp_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-MAX_RETRIES = 5
+rabbit_router = RabbitRouter(mq_settings.RABBITMQ_URL)
+rabbit_router.include_router(amqp_router)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage the application lifespan, including background connections."""
-    for attempt in range(MAX_RETRIES):
-        try:
-            await broker.startup()
-            logger.info("Successfully connected to RabbitMQ!")
-            break
-        except Exception as e:
-            if attempt == MAX_RETRIES - 1:
-                raise
-            logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
-            await asyncio.sleep(5)
+    """Manage app lifecycle, broker startup, and block listening."""
+    await rabbit_router.startup()
+
+    container = app.state.dishka_container
+    async with container() as request_container:
+        web3_provider = await request_container.get(Web3Provider)
+        await web3_provider._check_connection()  # noqa: SLF001
+        w3 = web3_provider.w3
+
+    block_listener_task = asyncio.create_task(listen_to_new_blocks(w3, container))
 
     yield
-    await broker.shutdown()
+
+    block_listener_task.cancel()
+    await rabbit_router.shutdown()
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application for Ethereum microservice."""
-    app = FastAPI(title="Ethereum Service API", version="1.0.0", lifespan=lifespan)
+    """Create and configure the FastAPI application instance with DI and routing."""
+    app = FastAPI(title="Ethereum Web3 Worker", lifespan=lifespan)
+    app.include_router(rabbit_router)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_settings.origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    app.add_exception_handler(DomainException, domain_exception_handler)
-    app.add_exception_handler(ValueError, value_error_handler)
-    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    @app.get("/health")
+    def healthcheck():
+        """Return the service health status."""
+        return {"status": "ok", "service": "ethereum_worker"}
 
     container = create_container()
     setup_dishka(container, app)

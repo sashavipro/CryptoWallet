@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/gateways/sqla_transaction.py."""
+"""rest_api/src/infrastructure/persistence/database/gateways/sqla_transaction.py."""
 
 import logging
 import uuid
@@ -38,12 +38,13 @@ class TransactionGateway:
         return map_transaction_to_domain(db_tx)
 
     async def get_transaction_by_hash(self, tx_hash: str) -> DomainTransaction | None:
-        """Retrieve a transaction by its blockchain hash."""
-        query = select(DBTransaction).where(DBTransaction.tx_hash == tx_hash)
-        result = await self.session.execute(query)
-        db_tx = result.scalar_one_or_none()
-
-        return map_transaction_to_domain(db_tx) if db_tx else None
+        """Retrieve a transaction entity by its blockchain hash."""
+        stmt = select(DBTransaction).where(DBTransaction.tx_hash == tx_hash)
+        result = await self.session.execute(stmt)
+        model = result.scalars().first()
+        if not model:
+            return None
+        return map_transaction_to_domain(model)
 
     async def update_transaction(
         self, transaction: DomainTransaction

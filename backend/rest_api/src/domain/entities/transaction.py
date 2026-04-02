@@ -1,4 +1,4 @@
-"""ethereum/src/domain/entities/transaction.py."""
+"""rest_api/src/domain/entities/transaction.py."""
 
 import uuid
 from dataclasses import dataclass

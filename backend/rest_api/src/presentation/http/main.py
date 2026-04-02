@@ -17,6 +17,7 @@ from src.infrastructure.log_config import setup_logging
 from src.infrastructure.message_broker.broker import broker
 from src.infrastructure.settings import cors_settings
 from src.ioc.container import create_container
+from src.presentation.amqp.consumers import router as amqp_router
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
 from src.presentation.http.exception_handlers import validation_exception_handler
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    broker.include_router(amqp_router)
     app.include_router(pages_router)
     app.include_router(auth_router)
     app.include_router(profile_router)

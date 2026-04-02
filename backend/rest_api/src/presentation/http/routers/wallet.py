@@ -1,4 +1,4 @@
-"""ethereum/src/presentation/http/routers/wallet.py."""
+"""rest_api/src/presentation/http/routers/wallet.py."""
 
 import uuid
 

@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/transaction/tx_value.py."""
+"""rest_api/src/domain/value_objects/transaction/tx_value.py."""
 
 from dataclasses import dataclass
 from decimal import Decimal

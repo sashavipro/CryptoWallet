@@ -1,4 +1,4 @@
-"""ethereum/src/infrastructure/persistence/database/mappers/transaction.py."""
+"""rest_api/src/infrastructure/persistence/database/mappers/transaction.py."""
 
 from src.domain.entities.transaction import Transaction as DomainTransaction
 from src.domain.entities.transaction import TransactionStatus

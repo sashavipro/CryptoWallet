@@ -1,4 +1,4 @@
-"""ethereum/src/application/dtos/requests/wallet.py."""
+"""rest_api/src/application/dtos/requests/wallet.py."""
 
 import uuid
 from dataclasses import dataclass

@@ -1,4 +1,4 @@
-"""ethereum/src/application/ports/gateways/transaction.py."""
+"""rest_api/src/application/ports/gateways/transaction.py."""
 
 import uuid
 from typing import Protocol
