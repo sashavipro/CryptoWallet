@@ -36,3 +36,11 @@ class AssetGateway:
         db_asset = result.scalar_one_or_none()
 
         return map_asset_to_domain(db_asset) if db_asset else None
+
+    async def get_all_assets(self) -> list[DomainAsset]:
+        """Retrieve all assets from the database."""
+        query = select(DBAsset)
+        result = await self.session.execute(query)
+        db_assets = result.scalars().all()
+
+        return [map_asset_to_domain(a) for a in db_assets]

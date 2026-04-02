@@ -1,16 +1,13 @@
-"""rest_api/src/application/interactors/transaction.py."""
+"""rest_api/src/application/interactors/faucet.py."""
 
 import logging
 import uuid
 from decimal import Decimal
-from typing import Any
 
-from src.application.dtos.request import CreatePendingTransactionRequest
-from src.application.dtos.response import TransactionResponse
+from src.application.dtos.response.transaction import TransactionResponse
 from src.application.ports.gateways.transaction import TransactionGateway
 from src.application.ports.gateways.uow import UnitOfWork
 from src.application.ports.gateways.wallet import WalletGateway
-from src.application.ports.providers.etherscan import EtherscanProvider
 from src.application.ports.providers.worker_client import EthereumWorkerClient
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import TimeProvider
@@ -21,8 +18,8 @@ from src.domain.exceptions import WalletNotFoundException
 logger = logging.getLogger(__name__)
 
 
-class CreatePendingTransactionInteractor:
-    """Use case for executing transaction via RPC and saving as PENDING."""
+class RequestTestnetEthInteractor:
+    """Use case for requesting testnet ETH via RabbitMQ and saving it."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -33,7 +30,7 @@ class CreatePendingTransactionInteractor:
         time_provider: TimeProvider,
         worker_client: EthereumWorkerClient,
     ) -> None:
-        """Initialize the interactor with required gateways and providers."""
+        """Initialize the interactor with necessary gateways and providers."""
         self.wallet_gateway = wallet_gateway
         self.transaction_gateway = transaction_gateway
         self.uow = uow
@@ -41,32 +38,24 @@ class CreatePendingTransactionInteractor:
         self.time_provider = time_provider
         self.worker_client = worker_client
 
-    async def __call__(
-        self, user_id: uuid.UUID, request: CreatePendingTransactionRequest
-    ) -> TransactionResponse:
-        """Execute the transaction via worker and save it with PENDING status."""
-        logger.info("Sending transaction request to worker for user: %s", user_id)
+    async def __call__(self, wallet_id: uuid.UUID) -> TransactionResponse:
+        """Request faucet ETH for the specified wallet and save the transaction."""
+        logger.info("Requesting faucet ETH for wallet: %s", wallet_id)
 
-        wallet = await self.wallet_gateway.get_wallet_by_id(request.wallet_id)
-        if not wallet or wallet.user_id != user_id:
+        wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
+        if not wallet:
             raise WalletNotFoundException
 
-        tx_hash_from_worker = await self.worker_client.send_transaction(
-            private_key_encrypted=wallet.encrypted_private_key.value,
-            from_address=wallet.address.value,
-            to_address=request.to_address,
-            value_eth=str(request.value),
-        )
+        tx_hash = await self.worker_client.request_faucet(address=wallet.address.value)
 
-        now = self.time_provider.get_current_time()
-
+        now = self.time_provider.now()
         tx = Transaction(
             id=self.id_generator.generate(),
             wallet_id=wallet.id,
-            tx_hash=tx_hash_from_worker,
-            from_address=wallet.address.value,
-            to_address=request.to_address,
-            value=Decimal(str(request.value)),
+            tx_hash=tx_hash,
+            from_address="0xFaucetMasterAddress0000000000000000000",  # Заглушка
+            to_address=wallet.address.value,
+            value=Decimal("0.001"),  # Сумма из фаусета
             tx_fee=Decimal("0"),
             status=TransactionStatus.PENDING,
             created_at=now,
@@ -86,56 +75,3 @@ class CreatePendingTransactionInteractor:
             status=tx.status.value,
             created_at=tx.created_at,
         )
-
-
-class GetTransactionsInteractor:
-    """Use case for retrieving transaction history from Etherscan and Local DB."""
-
-    def __init__(
-        self,
-        wallet_gateway: WalletGateway,
-        transaction_gateway: TransactionGateway,
-        etherscan_provider: EtherscanProvider,
-    ) -> None:
-        """Initialize the interactor with required gateways and external providers."""
-        self.wallet_gateway = wallet_gateway
-        self.transaction_gateway = transaction_gateway
-        self.etherscan_provider = etherscan_provider
-
-    async def __call__(self, wallet_id: uuid.UUID) -> list[dict[str, Any]]:
-        """Retrieve and merge transaction history from local database and Etherscan."""
-        wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-        if not wallet:
-            raise WalletNotFoundException
-
-        try:
-            es_txs = await self.etherscan_provider.get_wallet_transactions(
-                wallet.address
-            )
-        except Exception:
-            logger.exception("Failed to fetch transactions from Etherscan")
-            es_txs = []
-
-        db_txs = await self.transaction_gateway.get_transactions_by_wallet_id(wallet_id)
-
-        merged_txs = {}
-        for tx in es_txs:
-            tx_hash = tx.get("hash", "").lower()
-            merged_txs[tx_hash] = tx
-
-        for tx in db_txs:
-            tx_key = tx.tx_hash.lower() if tx.tx_hash else str(tx.id)
-            if (
-                tx_key not in merged_txs
-                and (tx.tx_hash or "").lower() not in merged_txs
-            ):
-                merged_txs[tx_key] = {
-                    "hash": tx.tx_hash or "Pending in queue...",
-                    "from": tx.from_address,
-                    "to": tx.to_address,
-                    "value": str(tx.value),
-                    "tx_fee": str(tx.tx_fee),
-                    "status": tx.status.value.lower(),
-                }
-
-        return list(merged_txs.values())

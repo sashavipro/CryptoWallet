@@ -30,3 +30,10 @@ class EthereumWorkerClient(Protocol):
     async def get_balance(self, address: str) -> str:
         """Request live balance from Web3."""
         ...
+
+    async def import_wallet(self, private_key: str) -> dict[str, str]:
+        """Request worker to recover address from a private key and encrypt it.
+
+        Returns dict with address and private_key_encrypted.
+        """
+        ...

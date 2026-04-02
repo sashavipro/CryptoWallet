@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.templating import Jinja2Templates
 
+from src.application.interactors.asset import GetAssetsInteractor
+from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.application.interactors.login import LoginUserInteractor
 from src.application.interactors.profile import ChangePasswordInteractor
 from src.application.interactors.profile import DeleteAvatarInteractor
@@ -23,15 +25,24 @@ from src.application.interactors.profile import UpdateUserInteractor
 from src.application.interactors.register import RegisterUserInteractor
 from src.application.interactors.stats import GetStatsInteractor
 from src.application.interactors.stats import IncrementTotalMessagesInteractor
-from src.application.ports.events import EventPublisher
+from src.application.interactors.transaction import CreatePendingTransactionInteractor
+from src.application.interactors.transaction import GetTransactionsInteractor
+from src.application.interactors.wallet import CreateWalletInteractor
+from src.application.interactors.wallet import DeleteWalletInteractor
+from src.application.interactors.wallet import GetBalanceInteractor
+from src.application.interactors.wallet import GetWalletsInteractor
 from src.application.ports.gateways import PermissionGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
+from src.application.ports.gateways.asset import AssetGateway
 from src.application.ports.gateways.stats import StatsGateway
+from src.application.ports.gateways.transaction import TransactionGateway
+from src.application.ports.gateways.wallet import WalletGateway
 from src.application.ports.providers import EthereumWorkerClient
 from src.application.ports.providers import FileUploader
 from src.application.ports.providers import JwtProvider as JwtProviderPort
 from src.application.ports.providers import MailProvider
+from src.application.ports.providers.etherscan import EtherscanProvider
 from src.application.ports.utils import Encryptor
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
@@ -43,13 +54,17 @@ from src.infrastructure.message_broker.broker import broker
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
+from src.infrastructure.persistence.database.gateways import SqlaAssetGateway
+from src.infrastructure.persistence.database.gateways import SqlaTransactionGateway
 from src.infrastructure.persistence.database.gateways import SqlaUnitOfWork
+from src.infrastructure.persistence.database.gateways import SqlaWalletGateway
 from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
 )
 from src.infrastructure.providers import DOSpacesUploader
 from src.infrastructure.providers import JwtProvider
 from src.infrastructure.providers import MailjetProvider
+from src.infrastructure.providers.etherscan import EtherscanProviderImpl
 from src.infrastructure.providers.worker_client import EthereumWorkerClientImpl
 from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
@@ -123,9 +138,9 @@ class InfrastructureProvider(Provider):
         return EthereumWorkerClientImpl(broker)
 
     jwt_provider = provide(JwtProvider, provides=JwtProviderPort)
-    event_publisher = provide(EthereumWorkerClientImpl, provides=EventPublisher)
     mail_provider = provide(MailjetProvider, provides=MailProvider)
     file_uploader = provide(DOSpacesUploader, provides=FileUploader)
+    etherscan_provider = provide(EtherscanProviderImpl, provides=EtherscanProvider)
 
     stats_gateway = provide(
         RedisStatsGateway, scope=Scope.REQUEST, provides=StatsGateway
@@ -191,6 +206,15 @@ class DbProvider(Provider):
     )
     uow = provide(SqlaUnitOfWork, scope=Scope.REQUEST, provides=UnitOfWork)
     sqla_user_gateway = provide(SqlaUserGateway, scope=Scope.REQUEST)
+    asset_gateway = provide(
+        SqlaAssetGateway, scope=Scope.REQUEST, provides=AssetGateway
+    )
+    tx_gateway = provide(
+        SqlaTransactionGateway, scope=Scope.REQUEST, provides=TransactionGateway
+    )
+    wallet_gateway = provide(
+        SqlaWalletGateway, scope=Scope.REQUEST, provides=WalletGateway
+    )
 
 
 class InteractorProvider(Provider):
@@ -213,3 +237,19 @@ class InteractorProvider(Provider):
     # Stats
     get_stats_interactor = provide(GetStatsInteractor)
     increment_messages_interactor = provide(IncrementTotalMessagesInteractor)
+
+    # Wallets
+    create_wallet_interactor = provide(CreateWalletInteractor)
+    get_wallets_interactor = provide(GetWalletsInteractor)
+    get_balance_interactor = provide(GetBalanceInteractor)
+    delete_wallet_interactor = provide(DeleteWalletInteractor)
+
+    # Transactions
+    create_transaction_interactor = provide(CreatePendingTransactionInteractor)
+    get_transactions_interactor = provide(GetTransactionsInteractor)
+
+    # Faucet
+    request_faucet_interactor = provide(RequestTestnetEthInteractor)
+
+    # Assets
+    get_assets_interactor = provide(GetAssetsInteractor)

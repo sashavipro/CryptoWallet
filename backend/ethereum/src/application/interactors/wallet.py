@@ -41,3 +41,23 @@ class GetBalanceInteractor:
 
         balance = await self.web3_provider.get_balance(EthereumAddress(address))
         return str(balance)
+
+
+class ImportWalletInteractor:
+    """Recovers an address from a raw private key and returns encrypted data."""
+
+    def __init__(self, web3_provider: Web3Provider, encryptor: Encryptor) -> None:
+        """Initialize the interactor with Web3 and encryption providers."""
+        self.web3_provider = web3_provider
+        self.encryptor = encryptor
+
+    async def __call__(self, private_key: str) -> dict[str, str]:
+        """Derive address and encrypt the private key."""
+        address = self.web3_provider.get_address_from_private_key(private_key)
+        encrypted_pk = self.encryptor.encrypt(private_key)
+
+        logger.info("Imported wallet address: %s", address)
+        return {
+            "address": address,
+            "private_key_encrypted": encrypted_pk,
+        }

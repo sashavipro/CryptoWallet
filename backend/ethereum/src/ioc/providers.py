@@ -14,6 +14,7 @@ from src.application.interactors.transaction_watcher import (
 )
 from src.application.interactors.wallet import CreateWalletInteractor
 from src.application.interactors.wallet import GetBalanceInteractor
+from src.application.interactors.wallet import ImportWalletInteractor
 from src.application.ports.providers.faucet import FaucetProvider
 from src.application.ports.providers.nonce_manager import NonceManager
 from src.application.ports.providers.web3 import Web3Provider
@@ -37,10 +38,7 @@ class UtilsProvider(Provider):
 
     scope = Scope.APP
 
-    @provide
-    def provide_encryptor(self, settings: SecuritySettings) -> Encryptor:
-        """Provide an AES encryptor implementation."""
-        return AesEncryptor(settings)
+    encryptor = provide(AesEncryptor, provides=Encryptor)
 
 
 class InfrastructureProvider(Provider):
@@ -87,6 +85,7 @@ class InteractorProvider(Provider):
 
     create_wallet_interactor = provide(CreateWalletInteractor)
     get_balance_interactor = provide(GetBalanceInteractor)
+    import_wallet_interactor = provide(ImportWalletInteractor)
     send_transaction_interactor = provide(SendTransactionInteractor)
     request_testnet_eth_interactor = provide(RequestTestnetEthInteractor)
     check_transaction_status_interactor = provide(CheckTransactionStatusInteractor)

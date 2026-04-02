@@ -38,37 +38,16 @@ services:
       - redis
       - rabbitmq
 
-  rest_worker:
-    build:
-      context: .
-      dockerfile: backend/rest_api/deploy/worker/Dockerfile
-    container_name: crypto_worker
-    env_file:
-      - backend/rest_api/.env
-    depends_on:
-      - rabbitmq
-
-  ethereum_api:
+  ethereum_service:
     build:
       context: .
       dockerfile: backend/ethereum/deploy/server/Dockerfile
-    container_name: crypto_ethereum_api
-    env_file:
-      - backend/ethereum/.env
-    depends_on:
-      - postgres
-      - redis
-      - rabbitmq
-
-  ethereum_worker:
-    build:
-      context: .
-      dockerfile: backend/ethereum/deploy/worker/Dockerfile
     container_name: crypto_ethereum_worker
     env_file:
       - backend/ethereum/.env
     depends_on:
       - rabbitmq
+      - redis
 
   nginx:
     build:
@@ -79,7 +58,6 @@ services:
       - "80:80"
     depends_on:
       - rest_api
-      - ethereum_api
 
 volumes:
   postgres_data:

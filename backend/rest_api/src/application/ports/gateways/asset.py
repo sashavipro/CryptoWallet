@@ -22,3 +22,7 @@ class AssetGateway(Protocol):
     ) -> Asset | None:
         """Retrieve an asset by its ticker and network."""
         ...
+
+    async def get_all_assets(self) -> list[Asset]:
+        """Retrieve all available assets."""
+        ...
