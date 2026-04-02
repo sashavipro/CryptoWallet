@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/asset/__init__.py."""
+"""rest_api/src/domain/value_objects/asset/__init__.py."""
 
 from .asset_type import AssetType
 from .decimals import AssetDecimals

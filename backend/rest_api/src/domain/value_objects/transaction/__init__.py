@@ -1,4 +1,4 @@
-"""ethereum/src/domain/value_objects/transaction/__init__.py."""
+"""rest_api/src/domain/value_objects/transaction/__init__.py."""
 
 from .tx_fee import TxFee
 from .tx_hash import TxHash
