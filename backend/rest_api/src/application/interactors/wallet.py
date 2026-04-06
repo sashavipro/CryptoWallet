@@ -48,12 +48,6 @@ class CreateWalletInteractor:
             "Requesting new wallet generation from worker for user: %s", user_id
         )
 
-        existing_wallet = await self.wallet_gateway.get_wallet_by_user_and_asset(
-            user_id, request.asset_id
-        )
-        if existing_wallet:
-            raise WalletAlreadyExistsException
-
         worker_data = await self.worker_client.create_wallet()
         now = self.time_provider.now()
 
@@ -66,6 +60,72 @@ class CreateWalletInteractor:
             asset_id=request.asset_id,
             address=valid_address.value,
             private_key_encrypted=valid_pk.value,
+            balance=Decimal("0.0"),
+            created_at=now,
+        )
+
+        async with self.uow:
+            await self.wallet_gateway.add_wallet(wallet)
+
+        return WalletResponse(
+            id=wallet.id,
+            user_id=wallet.user_id,
+            asset_id=wallet.asset_id,
+            address=wallet.address,
+            balance=wallet.balance,
+            balance_updated_at=wallet.balance_updated_at,
+            created_at=wallet.created_at,
+        )
+
+
+class ImportWalletInteractor:
+    """Use case for importing an existing wallet using a private key."""
+
+    def __init__(
+        self,
+        wallet_gateway: WalletGateway,
+        uow: UnitOfWork,
+        id_generator: IdGenerator,
+        time_provider: TimeProvider,
+        worker_client: EthereumWorkerClient,
+    ) -> None:
+        """Initialize the interactor with required gateways and providers."""
+        self.wallet_gateway = wallet_gateway
+        self.uow = uow
+        self.id_generator = id_generator
+        self.time_provider = time_provider
+        self.worker_client = worker_client
+
+    async def __call__(
+        self, user_id: uuid.UUID, request: ImportWalletRequest
+    ) -> WalletResponse:
+        """Import an existing wallet and save it to the database."""
+        logger.info("Importing wallet for user: %s", user_id)
+
+        worker_data = await self.worker_client.import_wallet(
+            private_key=request.private_key
+        )
+        address = worker_data["address"]
+
+        existing_wallet = (
+            await self.wallet_gateway.get_wallet_by_user_asset_and_address(
+                user_id, request.asset_id, address
+            )
+        )
+        if existing_wallet:
+            logger.warning(
+                "User %s tried to import duplicate wallet %s", user_id, address
+            )
+            raise WalletAlreadyExistsException
+
+        now = self.time_provider.now()
+
+        wallet = Wallet(
+            id=self.id_generator.generate(),
+            user_id=user_id,
+            asset_id=request.asset_id,
+            address=address,
+            private_key_encrypted=worker_data["private_key_encrypted"],
             balance=Decimal("0.0"),
             created_at=now,
         )
@@ -111,22 +171,50 @@ class GetWalletsInteractor:
 
 
 class GetBalanceInteractor:
-    """Use case for retrieving wallet balance from the local database."""
+    """Use case for retrieving wallet balance from the local database and Web3."""
 
-    def __init__(self, wallet_gateway: WalletGateway) -> None:
-        """Initialize the interactor with a wallet gateway."""
+    def __init__(
+        self,
+        wallet_gateway: WalletGateway,
+        uow: UnitOfWork,
+        time_provider: TimeProvider,
+        worker_client: EthereumWorkerClient,
+    ) -> None:
+        """Initialize the interactor with gateways and worker client."""
         self.wallet_gateway = wallet_gateway
+        self.uow = uow
+        self.time_provider = time_provider
+        self.worker_client = worker_client
 
-    async def __call__(self, wallet_id: uuid.UUID) -> WalletBalanceResponse:
-        """Retrieve the balance of a specific wallet from the database."""
-        logger.info("Retrieving balance from DB for wallet: %s", wallet_id)
+    async def __call__(
+        self, wallet_id: uuid.UUID, user_id: uuid.UUID
+    ) -> WalletBalanceResponse:
+        """Retrieve the live balance from Web3 via worker and update the database."""
+        logger.info(
+            "Retrieving live balance for wallet: %s (User: %s)", wallet_id, user_id
+        )
 
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-        if not wallet:
+
+        if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
+        live_balance_str = await self.worker_client.get_balance(wallet.address)
+
+        live_balance = Decimal(str(live_balance_str))
+
+        now = self.time_provider.now()
+
+        wallet.update_balance(live_balance, now)
+
+        async with self.uow:
+            await self.wallet_gateway.update_wallet(wallet)
+
         return WalletBalanceResponse(
-            balance=wallet.balance, updated_at=wallet.balance_updated_at
+            wallet_id=wallet.id,
+            address=wallet.address,
+            balance=wallet.balance,
+            balance_updated_at=wallet.balance_updated_at,
         )
 
 
@@ -138,72 +226,14 @@ class DeleteWalletInteractor:
         self.wallet_gateway = wallet_gateway
         self.uow = uow
 
-    async def __call__(self, wallet_id: uuid.UUID) -> None:
+    async def __call__(self, wallet_id: uuid.UUID, user_id: uuid.UUID) -> None:
         """Delete a specific wallet from the database."""
-        logger.info("Deleting wallet: %s", wallet_id)
+        logger.info("Deleting wallet: %s for user: %s", wallet_id, user_id)
+
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-        if not wallet:
+
+        if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
         async with self.uow:
             await self.wallet_gateway.delete_wallet(wallet_id)
-
-
-class ImportWalletInteractor:
-    """Use case for importing an existing wallet using a private key."""
-
-    def __init__(
-        self,
-        wallet_gateway: WalletGateway,
-        uow: UnitOfWork,
-        id_generator: IdGenerator,
-        time_provider: TimeProvider,
-        worker_client: EthereumWorkerClient,
-    ) -> None:
-        """Initialize the interactor with required gateways and providers."""
-        self.wallet_gateway = wallet_gateway
-        self.uow = uow
-        self.id_generator = id_generator
-        self.time_provider = time_provider
-        self.worker_client = worker_client
-
-    async def __call__(
-        self, user_id: uuid.UUID, request: ImportWalletRequest
-    ) -> WalletResponse:
-        """Import an existing wallet and save it to the database."""
-        logger.info("Importing wallet for user: %s", user_id)
-
-        existing_wallet = await self.wallet_gateway.get_wallet_by_user_and_asset(
-            user_id, request.asset_id
-        )
-        if existing_wallet:
-            raise WalletAlreadyExistsException
-
-        worker_data = await self.worker_client.import_wallet(
-            private_key=request.private_key
-        )
-
-        now = self.time_provider.now()
-
-        wallet = Wallet(
-            id=self.id_generator.generate(),
-            user_id=user_id,
-            asset_id=request.asset_id,
-            address=worker_data["address"],
-            private_key_encrypted=worker_data["private_key_encrypted"],
-            balance=Decimal("0.0"),
-            created_at=now,
-        )
-
-        async with self.uow:
-            await self.wallet_gateway.add_wallet(wallet)
-
-        return WalletResponse(
-            id=wallet.id,
-            user_id=wallet.user_id,
-            asset_id=wallet.asset_id,
-            address=wallet.address,
-            balance=wallet.balance,
-            balance_updated_at=wallet.balance_updated_at,
-            created_at=wallet.created_at,
-        )

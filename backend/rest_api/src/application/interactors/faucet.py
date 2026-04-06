@@ -38,15 +38,20 @@ class RequestTestnetEthInteractor:
         self.time_provider = time_provider
         self.worker_client = worker_client
 
-    async def __call__(self, wallet_id: uuid.UUID) -> TransactionResponse:
+    async def __call__(
+        self, wallet_id: uuid.UUID, user_id: uuid.UUID
+    ) -> TransactionResponse:
         """Request faucet ETH for the specified wallet and save the transaction."""
-        logger.info("Requesting faucet ETH for wallet: %s", wallet_id)
+        logger.info(
+            "Requesting faucet ETH for wallet: %s (User: %s)", wallet_id, user_id
+        )
 
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-        if not wallet:
+
+        if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
-        tx_hash = await self.worker_client.request_faucet(address=wallet.address.value)
+        tx_hash = await self.worker_client.request_faucet(address=wallet.address)
 
         now = self.time_provider.now()
         tx = Transaction(
@@ -54,7 +59,7 @@ class RequestTestnetEthInteractor:
             wallet_id=wallet.id,
             tx_hash=tx_hash,
             from_address="0xFaucetMasterAddress0000000000000000000",  # Заглушка
-            to_address=wallet.address.value,
+            to_address=wallet.address,
             value=Decimal("0.001"),  # Сумма из фаусета
             tx_fee=Decimal("0"),
             status=TransactionStatus.PENDING,

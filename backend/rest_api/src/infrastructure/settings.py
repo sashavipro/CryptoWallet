@@ -138,6 +138,18 @@ class CorsSettings(BaseSettings):
         ]
 
 
+class Web3Settings(BaseSettings):
+    """Etherscan API configuration."""
+
+    ETHERSCAN_BASE_URL: str = "https://api-sepolia.etherscan.io/api"
+    ETHERSCAN_API_KEY: str
+    WEB3_PROVIDER_URI: str = "https://ethereum-sepolia-rpc.publicnode.com"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 db_settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
@@ -146,3 +158,4 @@ mq_settings = RabbitMQSettings()
 redis_settings = RedisSettings()
 s3_settings = S3Settings()
 cors_settings = CorsSettings()
+web3_settings = Web3Settings()

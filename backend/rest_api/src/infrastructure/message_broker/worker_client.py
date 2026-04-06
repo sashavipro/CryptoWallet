@@ -14,7 +14,7 @@ class EthereumWorkerClientImpl(EthereumWorkerClient):
     async def create_wallet(self) -> dict[str, str]:
         """Send an RPC request to create a wallet."""
         logger.info("Sending RPC request: eth.create_wallet")
-        return await broker.request({}, queue="eth.create_wallet")
+        return await broker.publish({}, queue="eth.create_wallet", rpc=True)
 
     async def send_transaction(
         self,
@@ -31,9 +31,9 @@ class EthereumWorkerClientImpl(EthereumWorkerClient):
             "value_eth": value_eth,
         }
         logger.info("Sending RPC request: eth.send_transaction")
-        return await broker.request(payload, queue="eth.send_transaction")
+        return await broker.publish(payload, queue="eth.send_transaction", rpc=True)
 
     async def get_balance(self, address: str) -> str:
         """Retrieve the balance directly from the worker."""
         logger.info("Sending RPC request: eth.get_balance for %s", address)
-        return await broker.request(address, queue="eth.get_balance")
+        return await broker.publish(address, queue="eth.get_balance", rpc=True)

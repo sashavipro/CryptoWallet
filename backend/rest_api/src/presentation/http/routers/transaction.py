@@ -41,7 +41,7 @@ async def send_transaction(
 ) -> TransactionResponse:
     """Create and send a transaction."""
     request.user_id = user_id
-    return await interactor(request)
+    return await interactor(user_id=user_id, request=request)
 
 
 @router.get(
@@ -60,4 +60,4 @@ async def get_wallet_transactions(
     interactor: FromDishka[GetTransactionsInteractor],
 ) -> list[dict[str, Any]]:
     """Get transaction history via Etherscan."""
-    return await interactor(wallet_id)
+    return await interactor(user_id=user_id, wallet_id=wallet_id)

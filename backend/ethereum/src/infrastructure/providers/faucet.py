@@ -8,7 +8,6 @@ from src.application.ports.providers.nonce_manager import NonceManager
 from src.application.ports.providers.web3 import Web3Provider
 from src.application.ports.utils import Encryptor
 from src.domain.value_objects.shared.address import EthereumAddress
-from src.domain.value_objects.wallet.private_key import EncryptedPrivateKey
 from src.infrastructure.settings import Web3Settings
 
 logger = logging.getLogger(__name__)
@@ -30,10 +29,9 @@ class FaucetProviderImpl(FaucetProvider):
         self.encryptor = encryptor
         self.nonce_manager = nonce_manager
 
-        encrypted_key_vo = EncryptedPrivateKey(
+        self._master_private_key = self.encryptor.decrypt(
             self.settings.FAUCET_PRIVATE_KEY_ENCRYPTED
         )
-        self._master_private_key = self.encryptor.decrypt(encrypted_key_vo.value)
 
         self._master_address = EthereumAddress(self.settings.FAUCET_MASTER_ADDRESS)
         self._faucet_amount_eth = Decimal(str(self.settings.FAUCET_AMOUNT_ETH))

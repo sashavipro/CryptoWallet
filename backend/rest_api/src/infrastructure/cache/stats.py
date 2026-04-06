@@ -25,6 +25,5 @@ class RedisStatsGateway(StatsGateway):
 
     async def get_wallets_count(self, user_id: uuid.UUID) -> int:
         """Retrieve the total number of wallets owned by the user."""
-        # TODO Пока возвращаем 0. Реальный подсчет будет через ETH-сервис
         val = await self.redis.get(f"stats:{user_id}:wallets")
         return int(val) if val else 0

@@ -17,6 +17,10 @@ class TransactionGateway(Protocol):
         """Retrieve a transaction by its blockchain hash."""
         ...
 
+    async def get_transaction_by_id(self, tx_id: uuid.UUID) -> Transaction | None:
+        """Retrieve a transaction by its local UUID."""
+        ...
+
     async def update_transaction(self, transaction: Transaction) -> Transaction:
         """Update existing transaction records."""
         ...

@@ -72,3 +72,12 @@ class TransactionGateway:
         db_txs = result.scalars().all()
 
         return [map_transaction_to_domain(tx) for tx in db_txs]
+
+    async def get_transaction_by_id(self, tx_id: uuid.UUID) -> DomainTransaction | None:
+        """Retrieve a transaction entity by its local DB UUID."""
+        stmt = select(DBTransaction).where(DBTransaction.id == tx_id)
+        result = await self.session.execute(stmt)
+        model = result.scalars().first()
+        if not model:
+            return None
+        return map_transaction_to_domain(model)

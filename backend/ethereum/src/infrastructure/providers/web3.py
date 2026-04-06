@@ -1,5 +1,6 @@
 """ethereum/src/infrastructure/providers/web3.py."""
 
+import asyncio
 import logging
 from decimal import Decimal
 from typing import Any
@@ -125,7 +126,6 @@ class Web3ProviderImpl(Web3Provider):
     ) -> str:
         """Send native currency using dynamic Gas Estimation and EIP-1559."""
         await self._check_connection()
-
         amount_to_send = self.w3.to_wei(value, "ether")
 
         try:
@@ -161,20 +161,16 @@ class Web3ProviderImpl(Web3Provider):
             "chainId": await self.w3.eth.chain_id,
         }
 
-        signed_transaction = Account.sign_transaction(transaction, raw_private_key)
+        signed_transaction = await asyncio.to_thread(
+            Account.sign_transaction, transaction, raw_private_key
+        )
+
         tx_hash = await self.w3.eth.send_raw_transaction(
             signed_transaction.raw_transaction
         )
 
         formatted_hash = self.w3.to_hex(tx_hash)
-
-        logger.info(
-            "EIP-1559 Transaction sent from %s to %s for %s ETH. Hash: %s",
-            from_address.value,
-            to_address.value,
-            value,
-            formatted_hash,
-        )
+        logger.info("Transaction sent. Hash: %s", formatted_hash)
         return formatted_hash
 
     async def get_transaction_receipt(self, tx_hash: str) -> dict[str, Any] | None:

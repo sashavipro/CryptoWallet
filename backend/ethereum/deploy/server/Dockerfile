@@ -15,4 +15,4 @@ COPY . /app/
 
 ENV PYTHONPATH=/app/backend/ethereum
 
-CMD ["uvicorn", "src.presentation.http.main:app", "--host", "0.0.0.0", "--port", "8002"]
+CMD ["uvicorn", "src.presentation.http.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]

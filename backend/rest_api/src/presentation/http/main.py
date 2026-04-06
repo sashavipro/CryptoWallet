@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     """Manage the application lifespan, including background connections."""
     for attempt in range(MAX_RETRIES):
         try:
-            await broker.startup()
+            await broker.start()
             logger.info("Successfully connected to RabbitMQ!")
             break
         except Exception as e:
@@ -56,12 +56,18 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(5)
 
     yield
-    await broker.shutdown()
+    await broker.close()
 
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    app = FastAPI(title="CryptoWallet API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(
+        title="CryptoWallet API",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url="/docs",
+        redoc_url="/redoc",
+    )
 
     app.add_middleware(
         CORSMiddleware,

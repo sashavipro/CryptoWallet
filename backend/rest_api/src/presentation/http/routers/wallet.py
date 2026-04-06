@@ -46,7 +46,7 @@ async def create_wallet(
 ) -> WalletResponse:
     """Create a new wallet."""
     request.user_id = user_id
-    return await interactor(request)
+    return await interactor(user_id=user_id, request=request)
 
 
 @router.post(
@@ -68,7 +68,7 @@ async def import_existing_wallet(
 ) -> WalletResponse:
     """Import an existing wallet."""
     request.user_id = user_id
-    return await interactor(request)
+    return await interactor(user_id=user_id, request=request)
 
 
 @router.get(
@@ -105,7 +105,7 @@ async def get_wallet_balance(
     interactor: FromDishka[GetBalanceInteractor],
 ) -> WalletBalanceResponse:
     """Get the balance of a specific wallet."""
-    return await interactor(wallet_id)
+    return await interactor(wallet_id=wallet_id, user_id=user_id)
 
 
 @router.delete(

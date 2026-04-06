@@ -27,6 +27,12 @@ class WalletGateway(Protocol):
         """Retrieve a specific asset wallet for a specific user."""
         ...
 
+    async def get_wallet_by_user_asset_and_address(
+        self, user_id: uuid.UUID, asset_id: uuid.UUID, address: str
+    ) -> Wallet | None:
+        """Check if a specific address is already imported for this user and asset."""
+        ...
+
     async def get_wallets_by_addresses(self, addresses: list[str]) -> list[Wallet]:
         """Retrieve wallets that match any of the provided addresses."""
         ...

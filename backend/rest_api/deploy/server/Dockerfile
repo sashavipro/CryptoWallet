@@ -15,4 +15,4 @@ COPY . /app/
 
 ENV PYTHONPATH=/app/backend/rest_api
 
-CMD ["uvicorn", "src.presentation.http.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.presentation.http.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

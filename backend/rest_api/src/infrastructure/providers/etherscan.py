@@ -31,7 +31,7 @@ class EtherscanProviderImpl(EtherscanProvider):
             "address": address,
             "startblock": 0,
             "endblock": 99999999,
-            "sort": "asc",
+            "sort": "desc",
             "apikey": self.api_key,
         }
 

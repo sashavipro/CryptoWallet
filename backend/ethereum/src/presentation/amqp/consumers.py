@@ -14,6 +14,7 @@ from src.application.interactors.transaction_watcher import (
 from src.application.interactors.wallet import CreateWalletInteractor
 from src.application.interactors.wallet import GetBalanceInteractor
 from src.application.interactors.wallet import ImportWalletInteractor
+from src.application.ports.providers import NonceManager
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
@@ -49,15 +50,38 @@ async def handle_get_balance(
 @router.subscriber("eth.send_transaction")
 @inject
 async def handle_send_transaction(
-    payload: dict, interactor: FromDishka[SendTransactionInteractor]
-) -> str:
-    """Handle broadcasting a transaction to the Ethereum network."""
-    return await interactor(
-        private_key_encrypted=payload["private_key_encrypted"],
-        from_address=payload["from_address"],
-        to_address=payload["to_address"],
-        value_eth=payload["value_eth"],
-    )
+    payload: dict,
+    interactor: FromDishka[SendTransactionInteractor],
+    nonce_manager: FromDishka[NonceManager],
+) -> None:
+    """Process and execute an Ethereum transaction.
+
+    Uses the provided payload to send a transaction, increments the sender's
+    nonce upon success, and publishes the resulting transaction status.
+    """
+    tx_id = payload["tx_id"]
+    from_address = payload["from_address"]
+
+    try:
+        tx_hash = await interactor(
+            private_key_encrypted=payload["private_key_encrypted"],
+            from_address=from_address,
+            to_address=payload["to_address"],
+            value_eth=payload["value_eth"],
+        )
+
+        await nonce_manager.increment_nonce(from_address)
+
+        await router.broker.publish(
+            {"tx_id": tx_id, "tx_hash": tx_hash, "status": "PENDING"},
+            queue="eth.tx_initiated",
+        )
+    except Exception as e:
+        logger.exception("Failed to send tx %s", tx_id)
+        await router.broker.publish(
+            {"tx_id": tx_id, "status": "FAILED", "error": str(e)},
+            queue="eth.tx_failed_initiation",
+        )
 
 
 @router.subscriber("eth.request_faucet")

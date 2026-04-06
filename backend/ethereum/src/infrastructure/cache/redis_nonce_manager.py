@@ -12,69 +12,56 @@ logger = logging.getLogger(__name__)
 
 
 class RedisNonceManager(NonceManager):
-    """Redis implementation for NonceManager, with Web3 fallback."""
+    """Redis-based implementation of the NonceManager.
+
+    Handles retrieving, caching, and incrementing Ethereum transaction
+    nonces using Redis to prevent nonce collisions in concurrent environments.
+    """
 
     NONCE_CACHE_TTL_SECONDS = 3600
 
     def __init__(self, redis_client: Redis, web3_provider: Web3Provider) -> None:
-        """Initialize with Redis client and Web3 provider."""
+        """Initialize the RedisNonceManager."""
         self.redis = redis_client
         self.web3_provider = web3_provider
 
     def _get_nonce_key(self, address: str) -> str:
-        """Get the Redis key for a given address's nonce."""
         return f"wallet:nonce:{address.lower()}"
 
-    async def _fetch_nonce_from_web3(self, address: str) -> int:
-        """Fetch the latest nonce from the blockchain via Web3 provider."""
-        logger.info("Fetching fresh nonce from Web3 for address: %s", address)
-        return await self.web3_provider.get_transaction_count(EthereumAddress(address))
-
     async def get_current_nonce(self, address: str) -> int:
-        """Retrieve the current nonce for an address (from cache or Web3)."""
+        """Retrieve the current nonce for a given address.
+
+        Checks the Redis cache first. If missing, locks the key, checks again,
+        and falls back to querying the Web3 provider, caching the fresh nonce.
+        """
         eth_address = EthereumAddress(address).value
         nonce_key = self._get_nonce_key(eth_address)
 
-        cached_nonce_str = await self.redis.get(nonce_key)
+        cached_nonce = await self.redis.get(nonce_key)
+        if cached_nonce is not None:
+            return int(cached_nonce)
 
-        if cached_nonce_str:
-            return int(cached_nonce_str)
+        lock_key = f"lock:nonce:{eth_address}"
+        async with self.redis.lock(lock_key, timeout=10):
+            cached_nonce = await self.redis.get(nonce_key)
+            if cached_nonce is not None:
+                return int(cached_nonce)
 
-        fresh_nonce = await self._fetch_nonce_from_web3(eth_address)
-        await self.redis.setex(
-            nonce_key, self.NONCE_CACHE_TTL_SECONDS, str(fresh_nonce)
-        )
-        return fresh_nonce
+            fresh_nonce = await self.web3_provider.get_transaction_count(
+                EthereumAddress(eth_address)
+            )
+            await self.redis.setex(
+                nonce_key, self.NONCE_CACHE_TTL_SECONDS, str(fresh_nonce)
+            )
+            return fresh_nonce
 
     async def get_and_increment_nonce(self, address: str) -> int:
-        """Get the current nonce and immediately increment it atomically."""
-        eth_address = EthereumAddress(address).value
-        nonce_key = self._get_nonce_key(eth_address)
-        current_nonce_str = await self.redis.get(nonce_key)
+        """Retrieve the current nonce and increment it for the next transaction."""
+        current_nonce = await self.get_current_nonce(address)
+        await self.increment_nonce(address)
+        return current_nonce
 
-        if current_nonce_str is None:
-            fresh_nonce_from_web3 = await self._fetch_nonce_from_web3(eth_address)
-            await self.redis.setex(
-                nonce_key, self.NONCE_CACHE_TTL_SECONDS, str(fresh_nonce_from_web3)
-            )
-            current_nonce_to_return = fresh_nonce_from_web3
-        else:
-            current_nonce_to_return = int(current_nonce_str)
-
+    async def increment_nonce(self, address: str) -> None:
+        """Increment the stored nonce for a given address in Redis."""
+        nonce_key = self._get_nonce_key(EthereumAddress(address).value)
         await self.redis.incr(nonce_key)
-
-        return current_nonce_to_return
-
-    async def set_nonce(self, address: str, nonce: int) -> None:
-        """Explicitly set the nonce for an address in cache."""
-        eth_address = EthereumAddress(address).value
-        nonce_key = self._get_nonce_key(eth_address)
-        await self.redis.setex(nonce_key, self.NONCE_CACHE_TTL_SECONDS, str(nonce))
-        logger.debug("Nonce set for address %s: %s", eth_address, nonce)
-
-    async def invalidate_nonce(self, address: str) -> None:
-        """Remove cached nonce for an address."""
-        eth_address = EthereumAddress(address).value
-        nonce_key = self._get_nonce_key(eth_address)
-        await self.redis.delete(nonce_key)
-        logger.debug("Nonce invalidated for address %s", eth_address)

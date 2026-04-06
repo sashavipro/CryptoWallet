@@ -1,12 +1,16 @@
 // Глобальные переменные
 let currentWallets = [];
-let balancePollInterval = null; // Переменная для таймера AJAX-запросов
+let balancePollInterval = null; // Переменная для таймера AJAX-запросов баланса
+
+// НОВЫЕ ПЕРЕМЕННЫЕ ДЛЯ МОДАЛКИ ИСТОРИИ ТРАНЗАКЦИЙ:
+let txPollInterval = null;
+let currentOpenWalletId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadWallets();
 
-    // Запускаем фоновое обновление балансов каждые 10 секунд
-    balancePollInterval = setInterval(updateBalances, 10000);
+    // Запускаем фоновое обновление балансов каждые 30 секунд
+    balancePollInterval = setInterval(updateBalances, 30000);
 
     // Обработчик отправки транзакции
     const btnSend = document.getElementById('btnSendTx');
@@ -175,8 +179,7 @@ window.requestFaucet = async (walletId) => {
         if (res.ok) {
             showGlobalAlert('ETH успешно запрошен! Баланс обновится автоматически в течение минуты.');
 
-            // Запускаем серию проверок баланса через интервалы,
-            // чтобы поймать момент подтверждения транзакции в блокчейне
+            // Запускаем серию проверок баланса через интервалы
             setTimeout(updateBalances, 5000);  // через 5 секунд
             setTimeout(updateBalances, 15000); // через 15 секунд
             setTimeout(updateBalances, 30000); // через 30 секунд
@@ -190,56 +193,124 @@ window.requestFaucet = async (walletId) => {
     }
 };
 
-// Открытие модалки истории
-window.openTxHistory = async (walletId, address) => {
-    document.getElementById('txHistoryTitle').textContent = `Список транзакций ${address.substring(0,8)}...`;
+// --- НОВАЯ ЛОГИКА ИСТОРИИ ТРАНЗАКЦИЙ (ЖИВОЕ ОБНОВЛЕНИЕ) ---
+
+// 1. Открытие модалки истории и запуск опроса
+window.openTxHistory = (walletId, address) => {
+    currentOpenWalletId = walletId;
+    document.getElementById('txHistoryTitle').textContent = `История транзакций ${address.substring(0,8)}...`;
     const tbody = document.getElementById('txTableBody');
+
+    // Показываем "Загрузку" только при первом открытии
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Загрузка...</td></tr>';
     document.getElementById('txHistoryModal').style.display = 'flex';
 
-    try {
-        const res = await fetch(`/api/v1/transactions/wallet/${walletId}`);
-        if (res.ok) {
-            const txs = await res.json();
-            tbody.innerHTML = '';
+    // Делаем первый мгновенный запрос
+    fetchAndUpdateTxs(walletId);
 
-            if (txs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Транзакций нет.</td></tr>';
-                return;
-            }
-
-            txs.forEach(tx => {
-                const isError = tx.isError === "1" || tx.status === "failed" || tx.status === "FAILED";
-                const isPending = tx.status === "pending" || tx.status === "PENDING";
-
-                let statusHtml = '<span class="status-success" style="color: #27ae60; font-weight: bold;">Success</span>';
-                if (isError) statusHtml = '<span class="status-failed" style="color: #e74c3c; font-weight: bold;">Failed</span>';
-                if (isPending) statusHtml = '<span class="status-pending" style="color: #f39c12; font-weight: bold;">Pending</span>';
-
-                let valEth = tx.value;
-                if (valEth && valEth.toString().length > 10) {
-                    valEth = (parseFloat(valEth) / 1e18).toFixed(4);
-                }
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><a href="https://sepolia.etherscan.io/tx/${tx.hash || tx.tx_hash}" target="_blank" class="tx-hash" style="color: #3498db; text-decoration: none;">${(tx.hash || tx.tx_hash).substring(0, 10)}...</a></td>
-                        <td class="tx-addr">${(tx.from || tx.from_address).substring(0, 10)}...</td>
-                        <td class="tx-addr">${(tx.to || tx.to_address).substring(0, 10)}...</td>
-                        <td>${valEth} ETH</td>
-                        <td>${tx.gasUsed ? (tx.gasUsed * (tx.gasPrice || 0) / 1e18).toFixed(6) : (tx.tx_fee || '0')}</td>
-                        <td>${statusHtml}</td>
-                    </tr>
-                `;
-            });
-        }
-    } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки.</td></tr>';
-    }
+    // Запускаем фоновое обновление каждые 10 секунд (пока открыта модалка)
+    if (txPollInterval) clearInterval(txPollInterval);
+    txPollInterval = setInterval(() => {
+        fetchAndUpdateTxs(walletId);
+    }, 10000);
 };
 
+// 2. Умная функция обновления (без моргания таблицы)
+async function fetchAndUpdateTxs(walletId) {
+    // Если пользователь уже закрыл модалку или переключился, прерываемся
+    if (currentOpenWalletId !== walletId) return;
+
+    const tbody = document.getElementById('txTableBody');
+
+    try {
+        const res = await fetch(`/api/v1/transactions/wallet/${walletId}`);
+        if (!res.ok) return;
+
+        const txs = await res.json();
+
+        // Убираем надпись "Загрузка" или "Транзакций не найдено", если пришли данные
+        if (tbody.children.length === 1 && tbody.children[0].cells.length === 1 && txs.length > 0) {
+            tbody.innerHTML = '';
+        }
+
+        // Если список пуст
+        if (txs.length === 0 && (tbody.innerHTML === '' || tbody.children[0].cells.length === 1)) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Транзакций не найдено.</td></tr>';
+            return;
+        }
+
+        txs.forEach((tx, index) => {
+            const isError = tx.isError === "1" || tx.status === "failed";
+            const isPending = tx.status === "pending";
+
+            let statusHtml = '<span style="color: #27ae60; font-weight: bold;">Success</span>';
+            if (isError) statusHtml = '<span style="color: #e74c3c; font-weight: bold;">Failed</span>';
+            if (isPending) statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending ⏳</span>';
+
+            // Ищем, есть ли уже эта транзакция в таблице (по id строки)
+            const existingRow = document.getElementById(`tx-row-${tx.hash}`);
+
+            if (existingRow) {
+                // ТРАНЗАКЦИЯ УЖЕ ЕСТЬ: проверяем, не изменился ли статус
+                const statusCell = document.getElementById(`tx-status-${tx.hash}`);
+                if (statusCell && statusCell.innerHTML !== statusHtml) {
+                    statusCell.innerHTML = statusHtml;
+
+                    // Делаем зеленую вспышку, чтобы привлечь внимание к успешной транзакции
+                    existingRow.style.backgroundColor = 'rgba(39, 174, 96, 0.2)';
+                    existingRow.style.transition = 'background-color 1s ease';
+                    setTimeout(() => existingRow.style.backgroundColor = '', 1500);
+
+                    // Транзакция подтвердилась - форсируем обновление балансов
+                    updateBalances();
+                }
+            } else {
+                // НОВАЯ ТРАНЗАКЦИЯ: создаем её
+                const valEth = (parseFloat(tx.value) / 1e18).toFixed(4);
+                const date = tx.timeStamp ? new Date(tx.timeStamp * 1000).toLocaleString() : '---';
+
+                const newRow = document.createElement('tr');
+                newRow.id = `tx-row-${tx.hash}`;
+                newRow.innerHTML = `
+                    <td><a href="https://sepolia.etherscan.io/tx/${tx.hash}" target="_blank" style="color: #3498db;">${tx.hash.substring(0, 10)}...</a></td>
+                    <td>${date}</td>
+                    <td title="${tx.from}">${tx.from.substring(0, 8)}...</td>
+                    <td title="${tx.to}">${tx.to.substring(0, 8)}...</td>
+                    <td><strong>${valEth}</strong> ETH</td>
+                    <td id="tx-status-${tx.hash}">${statusHtml}</td>
+                `;
+
+                // Вставляем её в правильное место, чтобы сохранить сортировку от новых к старым
+                if (index >= tbody.children.length) {
+                    tbody.appendChild(newRow);
+                } else {
+                    tbody.insertBefore(newRow, tbody.children[index]);
+                }
+
+                // Делаем синюю вспышку для новой появившейся транзакции
+                newRow.style.backgroundColor = 'rgba(52, 152, 219, 0.2)';
+                newRow.style.transition = 'background-color 1s ease';
+                setTimeout(() => newRow.style.backgroundColor = '', 1500);
+            }
+        });
+
+    } catch (e) {
+        console.error("Ошибка при фоновом обновлении транзакций:", e);
+    }
+}
+
+// Закрытие модалок
 window.closeModal = (id) => {
     document.getElementById(id).style.display = 'none';
+
+    // Если закрываем модалку истории - чистим таймер
+    if (id === 'txHistoryModal') {
+        if (txPollInterval) {
+            clearInterval(txPollInterval);
+            txPollInterval = null;
+        }
+        currentOpenWalletId = null; // Сбрасываем ID
+    }
 };
 
 function showGlobalAlert(message, isError = false) {

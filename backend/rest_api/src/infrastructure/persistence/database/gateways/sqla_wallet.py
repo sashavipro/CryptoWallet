@@ -91,3 +91,17 @@ class WalletGateway:
         await self.session.execute(query)
         await self.session.flush()
         logger.info("Wallet deleted: %s", wallet_id)
+
+    async def get_wallet_by_user_asset_and_address(
+        self, user_id: uuid.UUID, asset_id: uuid.UUID, address: str
+    ) -> DomainWallet | None:
+        """Check if a specific address is already imported for this user and asset."""
+        query = select(DBWallet).where(
+            DBWallet.user_id == user_id,
+            DBWallet.asset_id == asset_id,
+            func.lower(DBWallet.address) == address.lower(),
+        )
+        result = await self.session.execute(query)
+        db_wallet = result.scalar_one_or_none()
+
+        return map_wallet_to_domain(db_wallet) if db_wallet else None

@@ -1,9 +1,11 @@
 """ethereum/src/presentation/http/main.py."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from dishka.integrations.fastapi import setup_dishka
+from dishka.integrations.fastapi import setup_dishka as setup_dishka_fastapi
+from dishka.integrations.faststream import setup_dishka as setup_dishka_faststream
 from fastapi import FastAPI
 from faststream.rabbit.fastapi import RabbitRouter
 
@@ -23,7 +25,20 @@ rabbit_router.include_router(amqp_router)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage app lifecycle and broker startup."""
-    await rabbit_router.startup()
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            await rabbit_router.startup()
+            logger.info("Successfully connected to RabbitMQ!")
+            break
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.exception(
+                    "Failed to connect to RabbitMQ after %s attempts.", max_retries
+                )
+                raise
+            logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
+            await asyncio.sleep(5)
 
     container = app.state.dishka_container
     async with container() as request_container:
@@ -37,7 +52,12 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application instance."""
-    app = FastAPI(title="Ethereum Web3 Worker", lifespan=lifespan)
+    app = FastAPI(
+        title="Ethereum Web3 Worker",
+        lifespan=lifespan,
+        docs_url="/docs",
+        redoc_url="/redoc",
+    )
     app.include_router(rabbit_router)
 
     @app.get("/health")
@@ -45,7 +65,10 @@ def create_app() -> FastAPI:
         return {"status": "ok", "service": "ethereum_worker"}
 
     container = create_container()
-    setup_dishka(container, app)
+
+    setup_dishka_fastapi(container, app)
+
+    setup_dishka_faststream(container, rabbit_router)
 
     return app
 

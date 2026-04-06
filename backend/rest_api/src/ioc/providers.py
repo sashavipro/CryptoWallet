@@ -13,31 +13,33 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.templating import Jinja2Templates
 
-from src.application.interactors.asset import GetAssetsInteractor
-from src.application.interactors.faucet import RequestTestnetEthInteractor
-from src.application.interactors.login import LoginUserInteractor
-from src.application.interactors.profile import ChangePasswordInteractor
-from src.application.interactors.profile import DeleteAvatarInteractor
-from src.application.interactors.profile import GenerateAvatarUploadUrlInteractor
-from src.application.interactors.profile import GetOtherProfileInteractor
-from src.application.interactors.profile import GetUserInteractor
-from src.application.interactors.profile import UpdateUserInteractor
-from src.application.interactors.register import RegisterUserInteractor
-from src.application.interactors.stats import GetStatsInteractor
-from src.application.interactors.stats import IncrementTotalMessagesInteractor
-from src.application.interactors.transaction import CreatePendingTransactionInteractor
-from src.application.interactors.transaction import GetTransactionsInteractor
-from src.application.interactors.wallet import CreateWalletInteractor
-from src.application.interactors.wallet import DeleteWalletInteractor
-from src.application.interactors.wallet import GetBalanceInteractor
-from src.application.interactors.wallet import GetWalletsInteractor
+from src.application.interactors import ChangePasswordInteractor
+from src.application.interactors import CreatePendingTransactionInteractor
+from src.application.interactors import CreateWalletInteractor
+from src.application.interactors import DeleteAvatarInteractor
+from src.application.interactors import DeleteWalletInteractor
+from src.application.interactors import GenerateAvatarUploadUrlInteractor
+from src.application.interactors import GetAssetsInteractor
+from src.application.interactors import GetBalanceInteractor
+from src.application.interactors import GetOtherProfileInteractor
+from src.application.interactors import GetStatsInteractor
+from src.application.interactors import GetTransactionsInteractor
+from src.application.interactors import GetUserInteractor
+from src.application.interactors import GetWalletsInteractor
+from src.application.interactors import ImportWalletInteractor
+from src.application.interactors import IncrementTotalMessagesInteractor
+from src.application.interactors import LoginUserInteractor
+from src.application.interactors import RegisterUserInteractor
+from src.application.interactors import RequestTestnetEthInteractor
+from src.application.interactors import UpdateUserInteractor
+from src.application.ports.events import EventPublisher
+from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import PermissionGateway
+from src.application.ports.gateways import StatsGateway
+from src.application.ports.gateways import TransactionGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
-from src.application.ports.gateways.asset import AssetGateway
-from src.application.ports.gateways.stats import StatsGateway
-from src.application.ports.gateways.transaction import TransactionGateway
-from src.application.ports.gateways.wallet import WalletGateway
+from src.application.ports.gateways import WalletGateway
 from src.application.ports.providers import EthereumWorkerClient
 from src.application.ports.providers import FileUploader
 from src.application.ports.providers import JwtProvider as JwtProviderPort
@@ -47,19 +49,26 @@ from src.application.ports.utils import Encryptor
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
 from src.application.ports.utils import TimeProvider
+from src.infrastructure.cache import CachedUserGateway
 from src.infrastructure.cache import RedisRateLimiter
-from src.infrastructure.cache.stats import RedisStatsGateway
-from src.infrastructure.cache.user_cache import CachedUserGateway
+from src.infrastructure.cache import RedisStatsGateway
 from src.infrastructure.message_broker.broker import broker
+from src.infrastructure.message_broker.event_publisher import EventPublisherImpl
+from src.infrastructure.persistence.database.gateways import (
+    AssetGateway as SqlaAssetGateway,
+)
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
-from src.infrastructure.persistence.database.gateways import SqlaAssetGateway
-from src.infrastructure.persistence.database.gateways import SqlaTransactionGateway
 from src.infrastructure.persistence.database.gateways import SqlaUnitOfWork
-from src.infrastructure.persistence.database.gateways import SqlaWalletGateway
+from src.infrastructure.persistence.database.gateways import (
+    TransactionGateway as SqlaTransactionGateway,
+)
 from src.infrastructure.persistence.database.gateways import (
     UserGateway as SqlaUserGateway,
+)
+from src.infrastructure.persistence.database.gateways import (
+    WalletGateway as SqlaWalletGateway,
 )
 from src.infrastructure.providers import DOSpacesUploader
 from src.infrastructure.providers import JwtProvider
@@ -72,12 +81,14 @@ from src.infrastructure.settings import MailSettings
 from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import S3Settings
 from src.infrastructure.settings import SecuritySettings
+from src.infrastructure.settings import Web3Settings
 from src.infrastructure.settings import auth_settings
 from src.infrastructure.settings import db_settings
 from src.infrastructure.settings import mail_settings
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import s3_settings
 from src.infrastructure.settings import security_settings
+from src.infrastructure.settings import web3_settings
 from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.infrastructure.utils.datetime_generator import DatetimeGenerator
 from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
@@ -137,6 +148,11 @@ class InfrastructureProvider(Provider):
         """Provide the Ethereum worker client implementation."""
         return EthereumWorkerClientImpl(broker)
 
+    @provide
+    def provide_web3_settings(self) -> Web3Settings:
+        """Provide Web3 connection settings."""
+        return web3_settings
+
     jwt_provider = provide(JwtProvider, provides=JwtProviderPort)
     mail_provider = provide(MailjetProvider, provides=MailProvider)
     file_uploader = provide(DOSpacesUploader, provides=FileUploader)
@@ -145,6 +161,7 @@ class InfrastructureProvider(Provider):
     stats_gateway = provide(
         RedisStatsGateway, scope=Scope.REQUEST, provides=StatsGateway
     )
+    event_publisher = provide(EventPublisherImpl, provides=EventPublisher)
 
     @provide
     async def provide_redis(self, settings: RedisSettings) -> AsyncIterable[Redis]:
@@ -177,7 +194,13 @@ class DbProvider(Provider):
     @provide
     def provide_engine(self, settings: DatabaseSettings) -> AsyncEngine:
         """Provide the SQLAlchemy async engine, injecting DatabaseSettings."""
-        return create_async_engine(settings.database_url, echo=False)
+        return create_async_engine(
+            settings.database_url,
+            echo=False,
+            pool_size=20,
+            max_overflow=30,
+            pool_timeout=30.0,
+        )
 
     @provide
     def provide_sessionmaker(
@@ -243,6 +266,7 @@ class InteractorProvider(Provider):
     get_wallets_interactor = provide(GetWalletsInteractor)
     get_balance_interactor = provide(GetBalanceInteractor)
     delete_wallet_interactor = provide(DeleteWalletInteractor)
+    import_wallet_interactor = provide(ImportWalletInteractor)
 
     # Transactions
     create_transaction_interactor = provide(CreatePendingTransactionInteractor)

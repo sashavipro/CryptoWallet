@@ -7,10 +7,7 @@ class EthereumWorkerClient(Protocol):
     """Port for RPC communication with the Ethereum stateless worker."""
 
     async def create_wallet(self) -> dict[str, str]:
-        """Request worker to generate a wallet.
-
-        Returns dict with address and private_key_encrypted.
-        """
+        """Request worker to generate a wallet."""
         ...
 
     async def send_transaction(
@@ -32,8 +29,16 @@ class EthereumWorkerClient(Protocol):
         ...
 
     async def import_wallet(self, private_key: str) -> dict[str, str]:
-        """Request worker to recover address from a private key and encrypt it.
+        """Request worker to recover address from a private key and encrypt it."""
+        ...
 
-        Returns dict with address and private_key_encrypted.
-        """
+    async def publish_send_transaction_event(
+        self,
+        tx_id: str,
+        private_key_encrypted: str,
+        from_address: str,
+        to_address: str,
+        value_eth: str,
+    ) -> None:
+        """Publish a transaction request asynchronously without waiting."""
         ...

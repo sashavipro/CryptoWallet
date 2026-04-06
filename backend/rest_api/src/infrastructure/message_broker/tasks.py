@@ -2,7 +2,8 @@
 
 import logging
 
-from dishka.integrations.taskiq import FromDishka
+from dishka.integrations.faststream import FromDishka
+from dishka.integrations.faststream import inject
 
 from src.application.ports.providers import MailProvider
 from src.infrastructure.message_broker.broker import broker
@@ -10,11 +11,16 @@ from src.infrastructure.message_broker.broker import broker
 logger = logging.getLogger(__name__)
 
 
-@broker.task(task_name="user_events.registered")
+@broker.subscriber("user_events.registered")
+@inject
 async def handle_user_registered_event(
-    user_id: str, email: str, username: str, mail_provider: FromDishka[MailProvider]
+    payload: dict, mail_provider: FromDishka[MailProvider]
 ) -> None:
     """Workflow for processing a successful registration."""
+    user_id = payload["user_id"]
+    email = payload["email"]
+    username = payload["username"]
+
     logger.info("Event received - User registered: %s (Email: %s)", user_id, email)
 
     try:

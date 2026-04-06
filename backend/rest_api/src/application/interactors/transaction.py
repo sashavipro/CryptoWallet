@@ -44,27 +44,26 @@ class CreatePendingTransactionInteractor:
     async def __call__(
         self, user_id: uuid.UUID, request: CreatePendingTransactionRequest
     ) -> TransactionResponse:
-        """Execute transaction via RPC and save it to the database."""
-        logger.info("Sending transaction request to worker for user: %s", user_id)
+        """Execute the pending transaction creation process.
+
+        Validates the wallet, creates a local pending transaction record,
+        publishes an event to the worker to process the transaction, and
+        returns the created transaction details.
+        """
+        logger.info("Initiating async transaction for user: %s", user_id)
 
         wallet = await self.wallet_gateway.get_wallet_by_id(request.wallet_id)
         if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
-        tx_hash_from_worker = await self.worker_client.send_transaction(
-            private_key_encrypted=wallet.encrypted_private_key.value,
-            from_address=wallet.address.value,
-            to_address=request.to_address,
-            value_eth=str(request.value),
-        )
-
-        now = self.time_provider.get_current_time()
+        now = self.time_provider.now()
+        tx_id = self.id_generator.generate()
 
         tx = Transaction(
-            id=self.id_generator.generate(),
+            id=tx_id,
             wallet_id=wallet.id,
-            tx_hash=tx_hash_from_worker,
-            from_address=wallet.address.value,
+            tx_hash=f"pending_{tx_id}",
+            from_address=wallet.address,
             to_address=request.to_address,
             value=Decimal(str(request.value)),
             tx_fee=Decimal("0"),
@@ -74,6 +73,14 @@ class CreatePendingTransactionInteractor:
 
         async with self.uow:
             await self.transaction_gateway.add_transaction(tx)
+
+        await self.worker_client.publish_send_transaction_event(
+            tx_id=str(tx_id),
+            private_key_encrypted=wallet.private_key_encrypted,
+            from_address=wallet.address,
+            to_address=request.to_address,
+            value_eth=str(request.value),
+        )
 
         return TransactionResponse(
             id=tx.id,
@@ -89,52 +96,65 @@ class CreatePendingTransactionInteractor:
 
 
 class GetTransactionsInteractor:
-    """Use case for retrieving transaction history from Etherscan and Local DB."""
+    """Use case for retrieving transaction history.
+
+    Merges confirmed transactions from Etherscan with local PENDING txs,
+    verifying live status via Web3 to eliminate Etherscan index delays.
+    """
 
     def __init__(
         self,
         wallet_gateway: WalletGateway,
         transaction_gateway: TransactionGateway,
         etherscan_provider: EtherscanProvider,
+        uow: UnitOfWork,
+        worker_client: EthereumWorkerClient,
     ) -> None:
         """Initialize with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
         self.transaction_gateway = transaction_gateway
         self.etherscan_provider = etherscan_provider
+        self.uow = uow
+        self.worker_client = worker_client
 
-    async def __call__(self, wallet_id: uuid.UUID) -> list[dict[str, Any]]:
-        """Retrieve and merge transactions from local database and Etherscan."""
+    async def __call__(
+        self, user_id: uuid.UUID, wallet_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
+        """Completely safe read-only method."""
+        logger.info("Fetching history for wallet %s", wallet_id)
+
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-        if not wallet:
+        if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
+        etherscan_txs = []
         try:
-            es_txs = await self.etherscan_provider.get_wallet_transactions(
+            etherscan_txs = await self.etherscan_provider.get_wallet_transactions(
                 wallet.address
             )
-        except Exception:  # noqa: BLE001
-            es_txs = []
+        except Exception:
+            logger.exception("Etherscan unreachable")
 
-        db_txs = await self.transaction_gateway.get_transactions_by_wallet_id(wallet_id)
+        local_txs = await self.transaction_gateway.get_transactions_by_wallet_id(
+            wallet_id
+        )
+        confirmed_hashes = {tx["hash"].lower() for tx in etherscan_txs}
 
-        merged_txs = {}
-        for tx in es_txs:
-            tx_hash = tx.get("hash", "").lower()
-            merged_txs[tx_hash] = tx
+        pending_txs = []
+        for tx in local_txs:
+            if tx.tx_hash.lower() in confirmed_hashes:
+                continue
 
-        for tx in db_txs:
-            tx_key = tx.tx_hash.lower() if tx.tx_hash else str(tx.id)
-            if (
-                tx_key not in merged_txs
-                and (tx.tx_hash or "").lower() not in merged_txs
-            ):
-                merged_txs[tx_key] = {
-                    "hash": tx.tx_hash or "Pending in queue...",
+            pending_txs.append(
+                {
+                    "hash": tx.tx_hash,
                     "from": tx.from_address,
                     "to": tx.to_address,
-                    "value": str(tx.value),
-                    "tx_fee": str(tx.tx_fee),
+                    "value": str(int(tx.value * Decimal("1e18"))),
+                    "timeStamp": str(int(tx.created_at.timestamp())),
                     "status": tx.status.value.lower(),
+                    "isError": "1" if tx.status == TransactionStatus.FAILED else "0",
                 }
+            )
 
-        return list(merged_txs.values())
+        return pending_txs + etherscan_txs

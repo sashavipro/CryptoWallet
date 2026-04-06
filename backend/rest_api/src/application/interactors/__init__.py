@@ -1,8 +1,11 @@
 """rest_api/src/application/interactors/__init__.py."""
 
+from .asset import GetAssetsInteractor
 from .faucet import RequestTestnetEthInteractor
 from .login import LoginUserInteractor
+from .profile import ChangePasswordInteractor
 from .profile import DeleteAvatarInteractor
+from .profile import GenerateAvatarUploadUrlInteractor
 from .profile import GetOtherProfileInteractor
 from .profile import GetUserInteractor
 from .profile import UpdateUserInteractor
@@ -18,10 +21,13 @@ from .wallet import GetWalletsInteractor
 from .wallet import ImportWalletInteractor
 
 __all__ = (
+    "ChangePasswordInteractor",
     "CreatePendingTransactionInteractor",
     "CreateWalletInteractor",
     "DeleteAvatarInteractor",
     "DeleteWalletInteractor",
+    "GenerateAvatarUploadUrlInteractor",
+    "GetAssetsInteractor",
     "GetBalanceInteractor",
     "GetOtherProfileInteractor",
     "GetStatsInteractor",

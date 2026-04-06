@@ -15,4 +15,4 @@ COPY . /app/
 
 ENV PYTHONPATH=/app/backend/rest_api
 
-CMD ["taskiq", "worker", "src.infrastructure.message_broker.broker:broker", "src.infrastructure.message_broker.tasks"]
+CMD ["taskiq", "worker", "src.infrastructure.message_broker.broker:broker", "src.infrastructure.message_broker.tasks", "--reload"]

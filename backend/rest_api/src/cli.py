@@ -68,9 +68,11 @@ def seed_assets():
             asset_gateway = await request_container.get(AssetGateway)
             uow = await request_container.get(UnitOfWork)
 
-            existing = await asset_gateway.get_asset_by_ticker_and_network(
-                "ETH", "sepolia"
+            all_assets = await asset_gateway.get_all_assets()
+            existing = any(
+                a.ticker == "ETH" and a.network == "sepolia" for a in all_assets
             )
+
             if existing:
                 click.echo("Asset 'ETH' already exists. Skipping.")
                 return
