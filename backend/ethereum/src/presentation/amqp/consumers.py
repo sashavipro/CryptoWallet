@@ -42,10 +42,10 @@ async def handle_import_wallet(
 @router.subscriber("eth.get_balance")
 @inject
 async def handle_get_balance(
-    address: str, interactor: FromDishka[GetBalanceInteractor]
+    payload: dict, interactor: FromDishka[GetBalanceInteractor]
 ) -> str:
     """Retrieve the balance of a specific Ethereum address."""
-    return await interactor(address)
+    return await interactor(payload["address"])
 
 
 @router.subscriber("eth.send_transaction")
@@ -94,7 +94,7 @@ async def handle_request_faucet(
 @router.subscriber("eth.check_tx_status")
 @inject
 async def handle_check_tx_status(
-    tx_hash: str, interactor: FromDishka[CheckTransactionStatusInteractor]
+    payload: dict, interactor: FromDishka[CheckTransactionStatusInteractor]
 ) -> dict | None:
     """Return tx status (SUCCESS/FAILED) or None if PENDING."""
-    return await interactor(tx_hash)
+    return await interactor(payload["tx_hash"])

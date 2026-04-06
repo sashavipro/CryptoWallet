@@ -29,20 +29,13 @@ class Web3ProviderImpl(Web3Provider):
         self.settings = settings
         self.w3: AsyncWeb3 | None = None
 
-        primary_urls = [
-            url.strip() for url in self.settings.WEB3_PROVIDER_URI.split(",")
-        ]
-        fallbacks = [
-            "https://ethereum-sepolia-rpc.publicnode.com",
-            "https://1rpc.io/sepolia",
-            "https://rpc.ankr.com/eth_sepolia",
+        self.rpc_nodes = [
+            url.strip()
+            for url in self.settings.WEB3_PROVIDER_URI.split(",")
+            if url.strip()
         ]
 
-        self.rpc_nodes = primary_urls + [f for f in fallbacks if f not in primary_urls]
-
-        logger.info(
-            "Web3Provider initialized with %d potential RPC nodes.", len(self.rpc_nodes)
-        )
+        logger.info("Web3Provider initialized with %d RPC nodes.", len(self.rpc_nodes))
 
     async def _get_working_w3(self) -> AsyncWeb3:
         """Iterate over RPC nodes and return the first working connection."""
@@ -52,7 +45,7 @@ class Web3ProviderImpl(Web3Provider):
                     provider = AsyncWeb3.AsyncWebsocketProvider(url)
                 else:
                     provider = AsyncWeb3.AsyncHTTPProvider(
-                        url, request_kwargs={"timeout": 10}
+                        url, request_kwargs={"timeout": 5}
                     )
 
                 w3 = AsyncWeb3(provider)

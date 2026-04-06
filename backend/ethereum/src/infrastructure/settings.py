@@ -17,7 +17,7 @@ class SecuritySettings(BaseSettings):
 class Web3Settings(BaseSettings):
     """Web3 configuration (RPC nodes and Faucet)."""
 
-    WEB3_PROVIDER_URI: str = "wss://ethereum-sepolia.publicnode.com"
+    WEB3_PROVIDER_URI: str
 
     FAUCET_PRIVATE_KEY_ENCRYPTED: str
     FAUCET_MASTER_ADDRESS: str
@@ -41,7 +41,7 @@ class RedisSettings(BaseSettings):
 class RabbitMQSettings(BaseSettings):
     """RabbitMQ configuration for FastStream."""
 
-    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
+    RABBITMQ_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
