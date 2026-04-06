@@ -21,3 +21,7 @@ class NonceManager(Protocol):
     async def invalidate_nonce(self, address: str) -> None:
         """Remove cached nonce for an address."""
         ...
+
+    async def increment_nonce(self, address: str) -> None:
+        """Explicitly increment the nonce after a successful transaction broadcast."""
+        ...

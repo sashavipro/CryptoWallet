@@ -4,6 +4,7 @@ import logging
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import RabbitBroker
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors.faucet import RequestTestnetEthInteractor
@@ -51,14 +52,11 @@ async def handle_get_balance(
 @inject
 async def handle_send_transaction(
     payload: dict,
+    broker: RabbitBroker,
     interactor: FromDishka[SendTransactionInteractor],
     nonce_manager: FromDishka[NonceManager],
 ) -> None:
-    """Process and execute an Ethereum transaction.
-
-    Uses the provided payload to send a transaction, increments the sender's
-    nonce upon success, and publishes the resulting transaction status.
-    """
+    """Process and execute an Ethereum transaction."""
     tx_id = payload["tx_id"]
     from_address = payload["from_address"]
 
@@ -72,13 +70,13 @@ async def handle_send_transaction(
 
         await nonce_manager.increment_nonce(from_address)
 
-        await router.broker.publish(
+        await broker.publish(
             {"tx_id": tx_id, "tx_hash": tx_hash, "status": "PENDING"},
             queue="eth.tx_initiated",
         )
     except Exception as e:
         logger.exception("Failed to send tx %s", tx_id)
-        await router.broker.publish(
+        await broker.publish(
             {"tx_id": tx_id, "status": "FAILED", "error": str(e)},
             queue="eth.tx_failed_initiation",
         )
