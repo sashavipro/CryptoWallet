@@ -10,6 +10,7 @@ from fastapi import status
 from src.application.dtos.response import TransactionResponse
 from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.domain.exceptions import AssetNotFoundException
+from src.domain.exceptions import FaucetRateLimitException
 from src.domain.exceptions import WalletNotFoundException
 from src.presentation.http.dependencies.auth import CurrentUserId
 from src.presentation.http.responses import create_error_responses
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/api/v1/faucet", tags=["faucet"])
     responses=create_error_responses(
         WalletNotFoundException,
         AssetNotFoundException,
+        FaucetRateLimitException,
     ),
     summary="Request Testnet ETH",
     description=(

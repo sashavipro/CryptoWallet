@@ -87,3 +87,11 @@ class InvalidDecimalsException(DomainException):
 
 class WalletAlreadyExistsException(DomainException):
     """User already has a wallet for this asset."""
+
+
+class FaucetRateLimitException(DomainException):
+    """User has exceeded the faucet rate limit."""
+
+    def __init__(self, hours: int) -> None:
+        """Initialize the exception with the hour limit."""
+        super().__init__(f"You can only request test ETH once every {hours} hours.")

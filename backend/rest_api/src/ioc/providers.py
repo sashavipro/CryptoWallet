@@ -41,10 +41,10 @@ from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
 from src.application.ports.gateways import WalletGateway
 from src.application.ports.providers import EthereumWorkerClient
+from src.application.ports.providers import EtherscanProvider
 from src.application.ports.providers import FileUploader
 from src.application.ports.providers import JwtProvider as JwtProviderPort
 from src.application.ports.providers import MailProvider
-from src.application.ports.providers.etherscan import EtherscanProvider
 from src.application.ports.utils import Encryptor
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
@@ -71,12 +71,13 @@ from src.infrastructure.persistence.database.gateways import (
     WalletGateway as SqlaWalletGateway,
 )
 from src.infrastructure.providers import DOSpacesUploader
+from src.infrastructure.providers import EthereumWorkerClientImpl
+from src.infrastructure.providers import EtherscanProviderImpl
 from src.infrastructure.providers import JwtProvider
 from src.infrastructure.providers import MailjetProvider
-from src.infrastructure.providers.etherscan import EtherscanProviderImpl
-from src.infrastructure.providers.worker_client import EthereumWorkerClientImpl
 from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
+from src.infrastructure.settings import FaucetSettings
 from src.infrastructure.settings import MailSettings
 from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import S3Settings
@@ -84,15 +85,16 @@ from src.infrastructure.settings import SecuritySettings
 from src.infrastructure.settings import Web3Settings
 from src.infrastructure.settings import auth_settings
 from src.infrastructure.settings import db_settings
+from src.infrastructure.settings import faucet_settings
 from src.infrastructure.settings import mail_settings
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import s3_settings
 from src.infrastructure.settings import security_settings
 from src.infrastructure.settings import web3_settings
-from src.infrastructure.utils.aes_encryptor import AesEncryptor
-from src.infrastructure.utils.datetime_generator import DatetimeGenerator
-from src.infrastructure.utils.pwdlib_hasher import PwdlibHasher
-from src.infrastructure.utils.uuid_generator import UuidGenerator
+from src.infrastructure.utils import AesEncryptor
+from src.infrastructure.utils import DatetimeGenerator
+from src.infrastructure.utils import PwdlibHasher
+from src.infrastructure.utils import UuidGenerator
 
 
 class UtilsProvider(Provider):
@@ -152,6 +154,11 @@ class InfrastructureProvider(Provider):
     def provide_web3_settings(self) -> Web3Settings:
         """Provide Web3 connection settings."""
         return web3_settings
+
+    @provide
+    def provide_faucet_settings(self) -> FaucetSettings:
+        """Provide faucet rate limit settings."""
+        return faucet_settings
 
     jwt_provider = provide(JwtProvider, provides=JwtProviderPort)
     mail_provider = provide(MailjetProvider, provides=MailProvider)

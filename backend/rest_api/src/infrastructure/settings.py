@@ -150,6 +150,17 @@ class Web3Settings(BaseSettings):
     )
 
 
+class FaucetSettings(BaseSettings):
+    """Faucet rate limit configuration."""
+
+    FAUCET_RATE_LIMIT_ENABLED: bool = True
+    FAUCET_RATE_LIMIT_HOURS: int = 24
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
 db_settings = DatabaseSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
@@ -159,3 +170,4 @@ redis_settings = RedisSettings()
 s3_settings = S3Settings()
 cors_settings = CorsSettings()
 web3_settings = Web3Settings()
+faucet_settings = FaucetSettings()

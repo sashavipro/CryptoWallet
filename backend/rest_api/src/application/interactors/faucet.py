@@ -4,6 +4,8 @@ import logging
 import uuid
 from decimal import Decimal
 
+from redis.asyncio import Redis
+
 from src.application.dtos.response.transaction import TransactionResponse
 from src.application.ports.gateways.transaction import TransactionGateway
 from src.application.ports.gateways.uow import UnitOfWork
@@ -13,7 +15,9 @@ from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import TimeProvider
 from src.domain.entities.transaction import Transaction
 from src.domain.entities.transaction import TransactionStatus
+from src.domain.exceptions import FaucetRateLimitException
 from src.domain.exceptions import WalletNotFoundException
+from src.infrastructure.settings import FaucetSettings
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +33,8 @@ class RequestTestnetEthInteractor:
         id_generator: IdGenerator,
         time_provider: TimeProvider,
         worker_client: EthereumWorkerClient,
+        redis: Redis,
+        settings: FaucetSettings,
     ) -> None:
         """Initialize the interactor with necessary gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -37,6 +43,8 @@ class RequestTestnetEthInteractor:
         self.id_generator = id_generator
         self.time_provider = time_provider
         self.worker_client = worker_client
+        self.redis = redis
+        self.settings = settings
 
     async def __call__(
         self, wallet_id: uuid.UUID, user_id: uuid.UUID
@@ -51,16 +59,27 @@ class RequestTestnetEthInteractor:
         if not wallet or wallet.user_id != user_id:
             raise WalletNotFoundException
 
+        limit_key = f"faucet_limit:{user_id}"
+
+        if self.settings.FAUCET_RATE_LIMIT_ENABLED:
+            if await self.redis.exists(limit_key):
+                logger.warning("User %s exceeded faucet rate limit", user_id)
+                raise FaucetRateLimitException(self.settings.FAUCET_RATE_LIMIT_HOURS)
+
         tx_hash = await self.worker_client.request_faucet(address=wallet.address)
+
+        if self.settings.FAUCET_RATE_LIMIT_ENABLED:
+            limit_seconds = self.settings.FAUCET_RATE_LIMIT_HOURS * 3600
+            await self.redis.setex(limit_key, limit_seconds, "1")
 
         now = self.time_provider.now()
         tx = Transaction(
             id=self.id_generator.generate(),
             wallet_id=wallet.id,
             tx_hash=tx_hash,
-            from_address="0xFaucetMasterAddress0000000000000000000",  # Заглушка
+            from_address="0xFaucetMasterAddress0000000000000000000",
             to_address=wallet.address,
-            value=Decimal("0.001"),  # Сумма из фаусета
+            value=Decimal("0.001"),
             tx_fee=Decimal("0"),
             status=TransactionStatus.PENDING,
             created_at=now,
