@@ -26,29 +26,27 @@ rabbit_router.include_router(amqp_router)
 async def lifespan(application: FastAPI):
     """Manage app lifecycle and broker startup."""
     max_retries = 5
+
     for attempt in range(max_retries):
         try:
-            await rabbit_router.startup()
+            await rabbit_router.broker.connect()
             logger.info("Successfully connected to RabbitMQ!")
             break
         except Exception as e:
             if attempt == max_retries - 1:
-                logger.exception(
-                    "Failed to connect to RabbitMQ after %s attempts.", max_retries
-                )
+                logger.exception("Failed to connect to RabbitMQ")
                 raise
             logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
             await asyncio.sleep(5)
 
     container = application.state.dishka_container
-
     async with container() as request_container:
         web3_provider = await request_container.get(Web3Provider)
         await web3_provider._check_connection()  # noqa: SLF001
+        logger.info("Successfully connected to Web3 Node!")
 
-    yield
-
-    await rabbit_router.shutdown()
+    async with rabbit_router.lifespan_context(application):
+        yield
 
 
 def create_app() -> FastAPI:

@@ -56,6 +56,14 @@ class EtherscanProviderImpl(EtherscanProvider):
                 )
                 return data["result"]
 
+            if data["status"] == "0" and data["message"] == "No transactions found":
+                logger.debug(
+                    "No historical transactions found on Etherscan "
+                    "for address %s (Wallet is empty/Pending)",
+                    address,
+                )
+                return []
+
             logger.warning(
                 "Etherscan API returned status %s for address %s: %s",
                 data["status"],

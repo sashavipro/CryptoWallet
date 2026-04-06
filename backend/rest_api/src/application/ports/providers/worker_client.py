@@ -42,3 +42,7 @@ class EthereumWorkerClient(Protocol):
     ) -> None:
         """Publish a transaction request asynchronously without waiting."""
         ...
+
+    async def check_tx_status(self, tx_hash) -> dict | None:
+        """Check the network status of a specific Ethereum transaction hash."""
+        ...

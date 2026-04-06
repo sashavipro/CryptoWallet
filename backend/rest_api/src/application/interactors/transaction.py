@@ -120,7 +120,7 @@ class GetTransactionsInteractor:
     async def __call__(
         self, user_id: uuid.UUID, wallet_id: uuid.UUID
     ) -> list[dict[str, Any]]:
-        """Completely safe read-only method."""
+        """Fetch history and verify pending txs via Web3."""
         logger.info("Fetching history for wallet %s", wallet_id)
 
         wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
@@ -138,12 +138,26 @@ class GetTransactionsInteractor:
         local_txs = await self.transaction_gateway.get_transactions_by_wallet_id(
             wallet_id
         )
-        confirmed_hashes = {tx["hash"].lower() for tx in etherscan_txs}
+
+        confirmed_hashes = {tx["hash"].lower() for tx in etherscan_txs if "hash" in tx}
 
         pending_txs = []
         for tx in local_txs:
             if tx.tx_hash.lower() in confirmed_hashes:
                 continue
+
+            if tx.status == TransactionStatus.PENDING and tx.tx_hash.startswith("0x"):
+                live_status = await self.worker_client.check_tx_status(tx.tx_hash)
+
+                if live_status:
+                    new_status_str = live_status.get("status", "FAILED")
+                    tx.status = TransactionStatus(new_status_str)
+
+                    if "tx_fee" in live_status:
+                        tx.tx_fee = Decimal(live_status["tx_fee"])
+
+                    async with self.uow:
+                        await self.transaction_gateway.update_transaction(tx)
 
             pending_txs.append(
                 {

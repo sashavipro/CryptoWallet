@@ -6,18 +6,22 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dishka.integrations.fastapi import setup_dishka
+from dishka.integrations.faststream import (
+    setup_dishka as setup_dishka_faststream,  # <-- Добавлен импорт
+)
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from faststream import FastStream
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
+import src.presentation.amqp.consumers  # noqa: F401
 from src.domain.exceptions import DomainException
 from src.infrastructure.log_config import setup_logging
 from src.infrastructure.message_broker.broker import broker
 from src.infrastructure.settings import cors_settings
 from src.ioc.container import create_container
-from src.presentation.amqp.consumers import router as amqp_router
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
 from src.presentation.http.exception_handlers import validation_exception_handler
@@ -33,8 +37,6 @@ from src.presentation.http.routers.wallet import router as wallet_router
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Вычисляем путь до папки frontend/static
-# main.py -> http -> presentation -> src -> rest_api -> backend -> CryptoWallet
 PROJECT_ROOT = Path(__file__).resolve().parents[5]
 STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
 
@@ -79,7 +81,6 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-    broker.include_router(amqp_router)
     app.include_router(pages_router)
     app.include_router(auth_router)
     app.include_router(profile_router)
@@ -94,7 +95,11 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
     container = create_container()
+
     setup_dishka(container, app)
+
+    faststream_app = FastStream(broker)
+    setup_dishka_faststream(container, faststream_app)
 
     return app
 

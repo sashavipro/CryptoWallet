@@ -44,4 +44,9 @@ class SendTransactionInteractor:
             nonce=nonce,
         )
         logger.info("Transaction sent: %s", tx_hash)
-        return tx_hash
+
+        if isinstance(tx_hash, bytes):
+            tx_hash_str = tx_hash.hex()
+            return tx_hash_str if tx_hash_str.startswith("0x") else f"0x{tx_hash_str}"
+
+        return str(tx_hash)
