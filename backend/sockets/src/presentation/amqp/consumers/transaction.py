@@ -26,7 +26,7 @@ async def handle_tx_status_update(payload: dict) -> None:
         {
             "tx_id": tx_id,
             "status": status,
-            "message": f"Транзакция перешла в статус {status}",
+            "message": f"The transaction has changed status {status}",
         },
         room=f"user_{user_id}",
     )

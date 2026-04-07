@@ -6,9 +6,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dishka.integrations.fastapi import setup_dishka
-from dishka.integrations.faststream import (
-    setup_dishka as setup_dishka_faststream,  # <-- Добавлен импорт
-)
+from dishka.integrations.faststream import setup_dishka as setup_dishka_faststream
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles

@@ -217,10 +217,10 @@ class InfrastructureProvider(Provider):
 
     @provide
     def provide_chat_message_gateway(
-        self, client: AsyncIOMotorClient, settings: MongoSettings
+        self, client: AsyncIOMotorClient
     ) -> ChatMessageGateway:
         """Provide the MongoDB implementation of the ChatMessageGateway."""
-        return MongoChatMessageGateway(client, db_name=settings.MONGO_DB)
+        return MongoChatMessageGateway(client, db_name=mongo_settings.MONGO_DB)
 
 
 class DbProvider(Provider):

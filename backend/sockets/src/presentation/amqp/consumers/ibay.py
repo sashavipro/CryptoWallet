@@ -32,7 +32,7 @@ async def handle_ibay_order_updated(payload: dict) -> None:
         {
             "order_id": order_id,
             "status": status,
-            "message": f"Статус вашего заказа обновлен: {status}",
+            "message": f"Your order status has been updated: {status}",
         },
         room=f"user_{buyer_id}",
     )

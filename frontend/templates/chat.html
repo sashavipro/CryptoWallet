@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+
+{% block title %}Чат - Crypto Wallet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* --- ГЛОБАЛЬНЫЕ НАСТРОЙКИ ДЛЯ ЧАТА --- */
+    /* Убиваем скролл на всей странице, чтобы он был только внутри чата */
+    body, .app-container, .main-wrapper {
+        overflow: hidden !important;
+    }
+
+    /* Убираем отступы базового шаблона, чтобы чат занял 100% места */
+    main.content {
+        padding: 0 !important;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 60px); /* Вычитаем высоту хедера (60px) */
+    }
+
+    /* --- Светлая Тема Чата --- */
+    .chat-container {
+        display: flex;
+        flex: 1;
+        width: 100%;
+        background: #ffffff;
+        overflow: hidden;
+    }
+
+    /* Основная зона сообщений */
+    .chat-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #e0e0e0;
+        background-color: #fcfcfc;
+        overflow: hidden; /* Важно: скрываем лишнее, скроллится только .chat-messages */
+    }
+
+    .chat-header {
+        padding: 15px 25px;
+        background: #ffffff;
+        border-bottom: 1px solid #e0e0e0;
+        font-weight: 600;
+        font-size: 18px;
+        color: #333333;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        z-index: 10;
+        flex-shrink: 0;
+    }
+
+    .chat-header-info {
+        font-size: 13px;
+        color: #777777;
+        font-weight: normal;
+    }
+
+    /* ВОТ ТОТ САМЫЙ ПОЛЗУНОК ТОЛЬКО ДЛЯ ЧАТА */
+    .chat-messages {
+        flex: 1;
+        padding: 25px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    /* Стили отдельного сообщения */
+    .message {
+        display: flex;
+        flex-direction: column;
+        max-width: 75%;
+    }
+
+    .message.own {
+        align-self: flex-end;
+        align-items: flex-end;
+    }
+
+    .message-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 5px;
+        font-size: 13px;
+        color: #777777;
+    }
+
+    .message.own .message-info {
+        flex-direction: row-reverse;
+    }
+
+    .message-author {
+        font-weight: 600;
+        color: #444444;
+    }
+
+    .message-content {
+        background: #f1f3f5;
+        padding: 12px 18px;
+        border-radius: 18px;
+        border-bottom-left-radius: 4px;
+        color: #333333;
+        font-size: 15px;
+        line-height: 1.4;
+        word-wrap: break-word;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    .message.own .message-content {
+        background: #3498db;
+        color: #ffffff;
+        border-radius: 18px;
+        border-bottom-right-radius: 4px;
+        border-bottom-left-radius: 18px;
+    }
+
+    .message-image {
+        max-width: 100%;
+        border-radius: 8px; /* Квадратные углы для картинок */
+        margin-top: 10px;
+        max-height: 250px;
+        object-fit: cover;
+        border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    /* Зона ввода */
+    .chat-input-wrapper {
+        padding: 15px 25px;
+        background: #ffffff;
+        border-top: 1px solid #e0e0e0;
+        flex-shrink: 0;
+    }
+
+    .chat-input-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: #f8f9fa;
+        padding: 8px 15px;
+        border-radius: 30px;
+        border: 1px solid #eeeeee;
+    }
+
+    .chat-input {
+        flex: 1;
+        padding: 8px;
+        border: none;
+        background: transparent;
+        color: #333333;
+        font-size: 15px;
+        outline: none;
+    }
+
+    .btn-icon {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #777777;
+        display: flex;
+        align-items: center;
+    }
+
+    .btn-send {
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .btn-send svg { width: 16px; height: 16px; fill: currentColor; margin-left: 2px; }
+
+    /* Боковая панель: В сети */
+    .chat-sidebar {
+        width: 280px;
+        background: #ffffff;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+    }
+
+    .online-header {
+        padding: 15px 25px;
+        font-weight: 600;
+        color: #333333;
+        border-bottom: 1px solid #e0e0e0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .online-count-badge {
+        background: #3498db;
+        color: white;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 10px;
+    }
+
+    .online-list {
+        flex: 1;
+        overflow-y: auto; /* Ползунок для списка онлайн */
+        padding: 10px 0;
+        list-style: none;
+        margin: 0;
+    }
+
+    .online-user {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 10px 25px;
+        transition: background 0.2s;
+    }
+
+    .online-user:hover {
+        background: #f8f9fa;
+    }
+
+    .online-avatar-wrapper {
+        position: relative;
+    }
+
+    /* ИЗМЕНЕНИЕ 3: Квадратные аватарки */
+    .online-avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px; /* Скругленный квадрат вместо круга (50%) */
+        object-fit: cover;
+        background-color: #eeeeee;
+        border: 1px solid #e0e0e0;
+    }
+
+    .online-status-dot {
+        position: absolute;
+        bottom: -4px;
+        right: -4px;
+        width: 14px;
+        height: 14px;
+        background: #2ecc71;
+        border: 2px solid #ffffff;
+        border-radius: 50%;
+    }
+
+    .online-username {
+        color: #333333;
+        font-weight: 500;
+        font-size: 14px;
+    }
+
+    .online-role {
+        color: #888888;
+        font-size: 12px;
+    }
+
+    /* --- АДАПТИВНОСТЬ ДЛЯ МОБИЛОК --- */
+    @media (max-width: 768px) {
+        .chat-container {
+            flex-direction: column; /* Ставим блоки друг под друга */
+        }
+        .chat-sidebar {
+            width: 100% !important;
+            height: 25vh; /* Отдаем 25% экрана под онлайн-список на мобилке */
+            border-left: none;
+            border-bottom: 1px solid #e0e0e0;
+            order: -1; /* Список онлайн будет сверху */
+        }
+        .chat-main {
+            height: 75vh;
+        }
+        .message {
+            max-width: 90%; /* Сообщения на мобилке шире */
+        }
+    }
+
+    /* Красивый скроллбар */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #aaaaaa; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-main">
+        <div class="chat-header">
+            <div>Global Chat</div>
+            <div class="chat-header-info">Общение в реальном времени</div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <div class="chat-input-wrapper">
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chatInput" placeholder="Введите сообщение..." autocomplete="off">
+                <button class="btn-send" id="btnSendMsg">
+                    <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-sidebar">
+        <div class="online-header">
+            В сети <span class="online-count-badge" id="onlineCount">0</span>
+        </div>
+        <ul class="online-list" id="onlineUsersList"></ul>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script src="/static/js/chat.js"></script>
+{% endblock %}

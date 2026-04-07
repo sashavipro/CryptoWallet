@@ -205,7 +205,7 @@ window.requestFaucet = async (walletId) => {
     const address = wallet ? wallet.address : '';
 
     // Сразу открываем модалку истории для наглядности в ЭТОЙ вкладке
-    openTxHistory(walletId, address);
+    // openTxHistory(walletId, address);
 
     try {
         const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, { method: 'POST' });

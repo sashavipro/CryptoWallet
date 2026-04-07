@@ -51,5 +51,9 @@ class InfrastructureProvider(Provider):
         yield client
         await client.aclose()
 
-    presence_gateway = provide(OnlinePresenceGateway, scope=Scope.REQUEST)
+    @provide(scope=Scope.REQUEST)
+    def provide_presence_gateway(self, redis: Redis) -> OnlinePresenceGateway:
+        """Provide OnlinePresenceGateway resolving the string prefix issue."""
+        return OnlinePresenceGateway(redis=redis)
+
     event_publisher = provide(EventPublisherImpl, provides=EventPublisher)
