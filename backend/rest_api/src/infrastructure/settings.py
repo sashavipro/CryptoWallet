@@ -28,6 +28,25 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
+class MongoSettings(BaseSettings):
+    """MongoDB configuration."""
+
+    MONGO_USER: str
+    MONGO_PASSWORD: str
+    MONGO_HOST: str
+    MONGO_PORT: int = 27017
+    MONGO_DB: str = "chat_db"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+    @property
+    def mongo_url(self) -> str:
+        """Generate connection URL for MongoDB."""
+        return f"mongodb://{self.MONGO_USER}:{self.MONGO_PASSWORD}@{self.MONGO_HOST}:{self.MONGO_PORT}"
+
+
 class AuthSettings(BaseSettings):
     """Authentication configuration."""
 
@@ -162,6 +181,7 @@ class FaucetSettings(BaseSettings):
 
 
 db_settings = DatabaseSettings()
+mongo_settings = MongoSettings()
 auth_settings = AuthSettings()
 mail_settings = MailSettings()
 security_settings = SecuritySettings()

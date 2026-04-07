@@ -2,6 +2,8 @@
 
 from .asset import Asset
 from .base import Base
+from .chat_mongo import ChatMessageDocument
+from .chat_mongo import ChatUserDocument
 from .permission import UserPermission
 from .transaction import Transaction
 from .user import User
@@ -11,6 +13,8 @@ __all__ = (
     "Asset",
     "Base",
     "Base",
+    "ChatMessageDocument",
+    "ChatUserDocument",
     "Transaction",
     "User",
     "UserPermission",

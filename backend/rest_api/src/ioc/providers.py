@@ -84,6 +84,7 @@ from src.infrastructure.settings import AuthSettings
 from src.infrastructure.settings import DatabaseSettings
 from src.infrastructure.settings import FaucetSettings
 from src.infrastructure.settings import MailSettings
+from src.infrastructure.settings import MongoSettings
 from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import S3Settings
 from src.infrastructure.settings import SecuritySettings
@@ -92,6 +93,7 @@ from src.infrastructure.settings import auth_settings
 from src.infrastructure.settings import db_settings
 from src.infrastructure.settings import faucet_settings
 from src.infrastructure.settings import mail_settings
+from src.infrastructure.settings import mongo_settings
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import s3_settings
 from src.infrastructure.settings import security_settings
@@ -193,21 +195,32 @@ class InfrastructureProvider(Provider):
         )
 
     @provide
-    async def provide_mongo_client(self) -> AsyncIterable[AsyncIOMotorClient]:
-        """Управляет подключением к MongoDB."""
-        client = AsyncIOMotorClient("mongodb://localhost:27017")
+    def provide_mongo_settings(self) -> MongoSettings:
+        """Provide MongoDB settings."""
+        return mongo_settings
+
+    @provide
+    async def provide_mongo_client(
+        self, settings: MongoSettings
+    ) -> AsyncIterable[AsyncIOMotorClient]:
+        """Manage the connection to MongoDB within the Docker network."""
+        client = AsyncIOMotorClient(settings.mongo_url)
         yield client
         client.close()
 
     @provide
-    def provide_chat_gateway(self, client: AsyncIOMotorClient) -> ChatMessageGateway:
-        """Provide chat message gateway for MongoDB."""
-        return MongoChatMessageGateway(client)
+    def provide_chat_user_gateway(
+        self, client: AsyncIOMotorClient, settings: MongoSettings
+    ) -> ChatUserGateway:
+        """Provide the MongoDB implementation of the ChatUserGateway."""
+        return MongoChatUserGateway(client, db_name=settings.MONGO_DB)
 
     @provide
-    def provide_chat_user_gateway(self, client: AsyncIOMotorClient) -> ChatUserGateway:
-        """Provide chat user gateway for MongoDB."""
-        return MongoChatUserGateway(client)
+    def provide_chat_message_gateway(
+        self, client: AsyncIOMotorClient, settings: MongoSettings
+    ) -> ChatMessageGateway:
+        """Provide the MongoDB implementation of the ChatMessageGateway."""
+        return MongoChatMessageGateway(client, db_name=settings.MONGO_DB)
 
 
 class DbProvider(Provider):

@@ -1,19 +1,25 @@
-"""rest_api/src/infrastructure/database/gateways/chat_mongo.py."""
+"""rest_api/src/infrastructure/persistence/database/gateways/chat_mongo.py."""
 
-from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from src.application.ports.gateways.chat import ChatMessageGateway
 from src.application.ports.gateways.chat import ChatUserGateway
 from src.domain.entities.chat import ChatMessage
 from src.domain.entities.chat import ChatUser
+from src.infrastructure.persistence.database.mappers.chat_mongo import (
+    map_domain_to_message_doc,
+)
+from src.infrastructure.persistence.database.mappers.chat_mongo import (
+    map_message_to_domain,
+)
+from src.infrastructure.persistence.database.mappers.user import map_user_to_domain
 
 
 class MongoChatUserGateway(ChatUserGateway):
     """Motor implementation of ChatUserGateway."""
 
-    def __init__(self, client: AsyncIOMotorClient, db_name: str = "chat_db"):
-        """Initialize the gateway with a MongoDB client and database name."""
+    def __init__(self, client: AsyncIOMotorClient, db_name: str):
+        """Initialize the gateway without hardcoded db_name."""
         self.collection = client[db_name]["chat_users_mongo"]
 
     async def upsert_user(self, user: ChatUser) -> None:
@@ -28,33 +34,20 @@ class MongoChatUserGateway(ChatUserGateway):
         """Find a user in the chat cache."""
         doc = await self.collection.find_one({"_id": user_id})
         if doc:
-            return ChatUser(
-                id=doc["_id"],
-                username=doc["username"],
-                avatar_url=doc.get("avatar_url"),
-            )
+            return map_user_to_domain(doc)
         return None
 
 
 class MongoChatMessageGateway(ChatMessageGateway):
     """Motor implementation of ChatMessageGateway."""
 
-    def __init__(self, client: AsyncIOMotorClient, db_name: str = "chat_db"):
-        """Initialize the gateway with a MongoDB client and database name."""
+    def __init__(self, client: AsyncIOMotorClient, db_name: str):
+        """Initialize the gateway without hardcoded db_name."""
         self.collection = client[db_name]["chat_messages_mongo"]
 
     async def add_message(self, message: ChatMessage) -> None:
         """Insert a new chat message into the database."""
-        doc = {
-            "user_id": message.user_id,
-            "message_text": message.message_text,
-            "image_url": message.image_url,
-            "created_at": message.created_at,
-        }
-
-        if message.id:
-            doc["_id"] = ObjectId(message.id)
-
+        doc = map_domain_to_message_doc(message)
         result = await self.collection.insert_one(doc)
         message.id = str(result.inserted_id)
 
@@ -63,15 +56,6 @@ class MongoChatMessageGateway(ChatMessageGateway):
         cursor = self.collection.find().sort("created_at", -1).skip(offset).limit(limit)
         docs = await cursor.to_list(length=limit)
 
-        messages = [
-            ChatMessage(
-                id=str(doc["_id"]),
-                user_id=doc["user_id"],
-                message_text=doc.get("message_text", ""),
-                image_url=doc.get("image_url"),
-                created_at=doc["created_at"],
-            )
-            for doc in docs
-        ]
+        messages = [map_message_to_domain(doc) for doc in docs]
 
         return list(reversed(messages))

@@ -13,9 +13,22 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  mongodb:
+    image: mongo:7-jammy
+    container_name: crypto_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
   redis:
     image: redis:7-alpine
     container_name: crypto_redis
+    ports:
+      - "6379:6379"
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -25,6 +38,7 @@ services:
       RABBITMQ_DEFAULT_PASS: password
     ports:
       - "15672:15672" # Админка RabbitMQ
+      - "5672:5672"
 
   rest_api:
     build:
@@ -37,6 +51,7 @@ services:
       - backend/rest_api/.env
     depends_on:
       - postgres
+      - mongodb
       - redis
       - rabbitmq
     volumes:
@@ -57,6 +72,21 @@ services:
     volumes:
       - .:/app
 
+  sockets_service:
+    build:
+      context: .
+      dockerfile: backend/sockets/deploy/server/Dockerfile
+    container_name: crypto_sockets
+    ports:
+      - "8004:8004"
+    env_file:
+      - backend/sockets/.env
+    depends_on:
+      - rabbitmq
+      - redis
+    volumes:
+      - .:/app
+
   nginx:
     build:
       context: ./nginx
@@ -66,6 +96,8 @@ services:
       - "80:80"
     depends_on:
       - rest_api
+      - sockets_service
 
 volumes:
   postgres_data:
+  mongodb_data:

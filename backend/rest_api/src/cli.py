@@ -5,6 +5,9 @@ import logging
 import uuid
 
 import click
+import pymongo
+from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import PyMongoError
 
 from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import UnitOfWork
@@ -13,6 +16,7 @@ from src.application.ports.utils import PasswordHasher
 from src.domain.entities import Asset
 from src.domain.entities import User
 from src.domain.value_objects.asset.asset_type import AssetType
+from src.infrastructure.settings import MongoSettings
 from src.infrastructure.settings import SecuritySettings
 from src.infrastructure.utils.aes_encryptor import AesEncryptor
 from src.ioc.container import create_container
@@ -103,6 +107,46 @@ def encrypt(secret: str):
         click.echo(click.style(f"Encrypted key: {encrypted_value}", fg="green"))
     except Exception as e:  # noqa: BLE001
         click.echo(click.style(f"Error: {e}", fg="red"))
+
+
+@cli.command()
+def init_mongo():
+    """Initialize MongoDB: create collections and build indexes."""
+
+    async def _run():
+        settings = MongoSettings()
+        client = AsyncIOMotorClient(settings.mongo_url)
+        db = client[settings.MONGO_DB]
+
+        click.echo("Initializing MongoDB indexes...")
+
+        try:
+            await db["chat_messages_mongo"].create_index(
+                [("created_at", pymongo.DESCENDING)],
+                name="idx_created_at_desc",
+                background=True,
+            )
+            click.echo(
+                click.style(
+                    "✓ Index on chat_messages_mongo (created_at) created.", fg="green"
+                )
+            )
+
+            await db["chat_messages_mongo"].create_index(
+                [("user_id", pymongo.ASCENDING)], name="idx_user_id", background=True
+            )
+            click.echo(
+                click.style(
+                    "✓ Index on chat_messages_mongo (user_id) created.", fg="green"
+                )
+            )
+
+        except PyMongoError as e:
+            click.echo(click.style(f"Error initializing MongoDB: {e}", fg="red"))
+        finally:
+            client.close()
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":
