@@ -6,9 +6,13 @@ import uuid
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
 
-from src.application.ports.gateways.transaction import TransactionGateway
-from src.application.ports.gateways.uow import UnitOfWork
+from src.application.ports.gateways import ChatMessageGateway
+from src.application.ports.gateways import ChatUserGateway
+from src.application.ports.gateways import TransactionGateway
+from src.application.ports.gateways import UnitOfWork
 from src.application.ports.providers import MailProvider
+from src.domain.entities import ChatMessage
+from src.domain.entities import ChatUser
 from src.infrastructure.message_broker.broker import broker
 
 logger = logging.getLogger(__name__)
@@ -54,17 +58,60 @@ async def handle_tx_failed_initiation(
 @broker.subscriber("user_events.registered")
 @inject
 async def handle_user_registered_event(
-    payload: dict, mail_provider: FromDishka[MailProvider]
+    payload: dict,
+    mail_provider: FromDishka[MailProvider],
+    chat_user_gateway: FromDishka[ChatUserGateway],
 ) -> None:
-    """Workflow for processing a successful registration."""
+    """Process user registration by updating the chat store and sending an email."""
     user_id = payload["user_id"]
     email = payload["email"]
     username = payload["username"]
 
     logger.info("Event received - User registered: %s (Email: %s)", user_id, email)
 
+    chat_user = ChatUser(id=user_id, username=username, avatar_url=None)
+    await chat_user_gateway.upsert_user(chat_user)
+    logger.info("User %s added to MongoDB chat_users_mongo", user_id)
+
     try:
         await mail_provider.send_welcome_email(to_email=email, username=username)
         logger.info("Welcome email sent asynchronously to user ID: %s", user_id)
     except Exception:
         logger.exception("Background task failed to send welcome email to %s", email)
+
+
+@broker.subscriber("chat.process_message")
+@inject
+async def handle_chat_message(
+    payload: dict,
+    message_gateway: FromDishka[ChatMessageGateway],
+) -> None:
+    """Save an incoming chat message to the database and broadcast it."""
+    user_id = payload["user_id"]
+    text = payload["text"]
+    image_key = payload.get("image_key")
+    temp_id = payload.get("temp_id")
+
+    image_url = f"https://my-s3-bucket.com/{image_key}" if image_key else None
+
+    new_message = ChatMessage(
+        id=None,
+        user_id=user_id,
+        message_text=text,
+        image_url=image_url,
+    )
+
+    await message_gateway.add_message(new_message)
+
+    broadcast_payload = {
+        "id": new_message.id,
+        "temp_id": temp_id,
+        "user_id": new_message.user_id,
+        "text": new_message.message_text,
+        "image_url": new_message.image_url,
+        "created_at": new_message.created_at.isoformat(),
+        "room_id": "chat_global",
+    }
+
+    await broker.publish(broadcast_payload, queue="chat.broadcast_message")
+    logger.info("Chat message saved to Mongo and broadcasted: %s", new_message.id)

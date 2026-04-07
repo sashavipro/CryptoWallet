@@ -6,6 +6,7 @@ from pathlib import Path
 from dishka import Provider
 from dishka import Scope
 from dishka import provide
+from motor.motor_asyncio import AsyncIOMotorClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,8 @@ from src.application.interactors import RequestTestnetEthInteractor
 from src.application.interactors import UpdateUserInteractor
 from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import AssetGateway
+from src.application.ports.gateways import ChatMessageGateway
+from src.application.ports.gateways import ChatUserGateway
 from src.application.ports.gateways import PermissionGateway
 from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways import TransactionGateway
@@ -57,6 +60,8 @@ from src.infrastructure.message_broker.event_publisher import EventPublisherImpl
 from src.infrastructure.persistence.database.gateways import (
     AssetGateway as SqlaAssetGateway,
 )
+from src.infrastructure.persistence.database.gateways import MongoChatMessageGateway
+from src.infrastructure.persistence.database.gateways import MongoChatUserGateway
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
@@ -186,6 +191,23 @@ class InfrastructureProvider(Provider):
             window_seconds=60,
             ban_seconds=300,
         )
+
+    @provide
+    async def provide_mongo_client(self) -> AsyncIterable[AsyncIOMotorClient]:
+        """Управляет подключением к MongoDB."""
+        client = AsyncIOMotorClient("mongodb://localhost:27017")
+        yield client
+        client.close()
+
+    @provide
+    def provide_chat_gateway(self, client: AsyncIOMotorClient) -> ChatMessageGateway:
+        """Provide chat message gateway for MongoDB."""
+        return MongoChatMessageGateway(client)
+
+    @provide
+    def provide_chat_user_gateway(self, client: AsyncIOMotorClient) -> ChatUserGateway:
+        """Provide chat user gateway for MongoDB."""
+        return MongoChatUserGateway(client)
 
 
 class DbProvider(Provider):

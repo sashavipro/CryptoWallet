@@ -2,6 +2,7 @@
 
 from .auth import JWTPayload
 from .auth import TokenResponse
+from .chat import MessageResponse
 from .transaction import TransactionResponse
 from .user import PublicProfileResponse
 from .user import UserResponse
@@ -13,6 +14,7 @@ from .wallet import WalletResponse
 __all__ = (
     "CachedBalance",
     "JWTPayload",
+    "MessageResponse",
     "PublicProfileResponse",
     "TokenResponse",
     "TransactionResponse",

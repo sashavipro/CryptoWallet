@@ -4,7 +4,7 @@ import logging
 
 import socketio
 
-from src.infrastructure.providers.jwt_provider import JwtValidator
+from src.infrastructure.providers import JwtValidator
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import security_settings
 

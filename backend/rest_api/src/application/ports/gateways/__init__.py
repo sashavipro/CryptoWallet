@@ -1,6 +1,8 @@
 """rest_api/src/application/ports/gateways/__init__.py."""
 
 from .asset import AssetGateway
+from .chat import ChatMessageGateway
+from .chat import ChatUserGateway
 from .permission import PermissionGateway
 from .stats import StatsGateway
 from .transaction import TransactionGateway
@@ -10,6 +12,8 @@ from .wallet import WalletGateway
 
 __all__ = (
     "AssetGateway",
+    "ChatMessageGateway",
+    "ChatUserGateway",
     "PermissionGateway",
     "StatsGateway",
     "TransactionGateway",

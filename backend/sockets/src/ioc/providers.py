@@ -7,7 +7,9 @@ from dishka import Scope
 from dishka import provide
 from redis.asyncio import Redis
 
+from src.application.ports.publishers.event_publisher import EventPublisher
 from src.infrastructure.cache.presence import OnlinePresenceGateway
+from src.infrastructure.message_broker.event_publisher import EventPublisherImpl
 from src.infrastructure.settings import RabbitMQSettings
 from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import SecuritySettings
@@ -50,3 +52,4 @@ class InfrastructureProvider(Provider):
         await client.aclose()
 
     presence_gateway = provide(OnlinePresenceGateway, scope=Scope.REQUEST)
+    event_publisher = provide(EventPublisherImpl, provides=EventPublisher)

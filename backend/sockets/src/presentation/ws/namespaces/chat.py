@@ -5,8 +5,8 @@ import logging
 import socketio
 from dishka import AsyncContainer
 
-from src.application.ports.publishers.event_publisher import EventPublisher
-from src.infrastructure.cache.presence import OnlinePresenceGateway
+from src.application.ports.publishers import EventPublisher
+from src.infrastructure.cache import OnlinePresenceGateway
 
 logger = logging.getLogger(__name__)
 
@@ -20,18 +20,18 @@ class ChatNamespace(socketio.AsyncNamespace):
         self.container = container
 
     async def on_connect(self, sid: str, environ: dict, auth: dict | None):
-        """Обрабатывает подключение именно к пространству /chat."""
+        """Handle connections specifically to the /chat channel."""
         global_session = await self.get_session(sid, namespace="/")
         user_id = global_session.get("user_id")
 
         if not user_id:
             error_msg = "Unauthorized access to chat"
-            raise socketio.exceptions.ConnectionRefusedError(error_msg)
+            raise ConnectionRefusedError(error_msg)
 
         await self.save_session(sid, {"user_id": user_id})
 
-        self.enter_room(sid, f"user_{user_id}")
-        self.enter_room(sid, "chat_global")
+        await self.enter_room(sid, f"user_{user_id}")
+        await self.enter_room(sid, "chat_global")
 
         async with self.container() as request_container:
             presence = await request_container.get(OnlinePresenceGateway)
@@ -50,7 +50,7 @@ class ChatNamespace(socketio.AsyncNamespace):
         logger.info("User %s connected to chat. sid: %s", user_id, sid)
 
     async def on_disconnect(self, sid: str):
-        """Срабатывает при закрытии вкладки или обрыве связи."""
+        """Trigger when a tab is closed or the connection is lost."""
         session = await self.get_session(sid)
         user_id = session.get("user_id")
 
@@ -71,7 +71,7 @@ class ChatNamespace(socketio.AsyncNamespace):
         logger.info("User %s disconnected from chat. sid: %s", user_id, sid)
 
     async def on_typing(self, sid: str, data: dict):
-        """Broadcasts a typing event to other users in the global chat."""
+        """Broadcast a typing event to other users in the global chat."""
         session = await self.get_session(sid)
         user_id = session.get("user_id")
         await self.emit(
@@ -79,7 +79,7 @@ class ChatNamespace(socketio.AsyncNamespace):
         )
 
     async def on_send_message(self, sid: str, data: dict):
-        """Обработка входящего сообщения от клиента."""
+        """Process an incoming message from the client."""
         session = await self.get_session(sid)
         user_id = session.get("user_id")
 
