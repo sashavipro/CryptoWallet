@@ -17,6 +17,10 @@ class ChatUserGateway(Protocol):
         """Retrieve cached user details."""
         ...
 
+    async def update_chat_access(self, user_id: str, *, has_access: bool) -> None:
+        """Update the chat access flag for a user."""
+        ...
+
 
 class ChatMessageGateway(Protocol):
     """Gateway for MongoDB chat message persistence."""

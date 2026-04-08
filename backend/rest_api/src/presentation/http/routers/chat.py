@@ -8,7 +8,7 @@ from fastapi import Query
 from src.application.dtos.response.chat import MessageResponse
 from src.application.ports.gateways.chat import ChatMessageGateway
 
-router = APIRouter(prefix="/chat", tags=["Chat"])
+router = APIRouter(prefix="/api/v1/chat", tags=["Chat"])
 
 
 @router.get("/messages", response_model=list[MessageResponse])

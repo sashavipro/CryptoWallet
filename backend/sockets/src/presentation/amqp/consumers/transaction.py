@@ -10,32 +10,28 @@ logger = logging.getLogger(__name__)
 router = RabbitRouter()
 
 
-@router.subscriber("eth.tx_status_updated")
+@router.subscriber("ws.tx_updated")
 async def handle_tx_status_update(payload: dict) -> None:
-    """Listen for transaction status updates (PENDING -> SUCCESS/FAILED)."""
+    """Listen for transaction status updates and broadcast to WS."""
     user_id = payload.get("user_id")
-    tx_id = payload.get("tx_id")
+    tx_hash = payload.get("tx_hash")
     status = payload.get("status")
     wallet_id = payload.get("wallet_id")
+    value = payload.get("value")
 
-    if not user_id:
+    if not user_id or not tx_hash:
         return
 
     await sio.emit(
-        "transaction_updated",
+        "transaction_status_changed",
         {
-            "tx_id": tx_id,
+            "tx_hash": tx_hash,
             "status": status,
-            "message": f"The transaction has changed status {status}",
+            "wallet_id": wallet_id,
+            "value": value,
+            "message": f"Транзакция перешла в статус {status}",
         },
         room=f"user_{user_id}",
+        namespace="/chat",
     )
-    logger.info("WS: Sent tx %s status (%s) to user %s", tx_id, status, user_id)
-
-    if status == "SUCCESS" and wallet_id:
-        await sio.emit(
-            "balance_update_required",
-            {"wallet_id": wallet_id},
-            room=f"user_{user_id}",
-        )
-        logger.info("WS: Requested balance update for wallet %s", wallet_id)
+    logger.info("WS: Sent tx %s status (%s) to user %s", tx_hash, status, user_id)

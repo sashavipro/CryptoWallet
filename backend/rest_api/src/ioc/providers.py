@@ -33,6 +33,7 @@ from src.application.interactors import LoginUserInteractor
 from src.application.interactors import RegisterUserInteractor
 from src.application.interactors import RequestTestnetEthInteractor
 from src.application.interactors import UpdateUserInteractor
+from src.application.interactors.chat import GetChatHistoryInteractor
 from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import ChatMessageGateway
@@ -319,3 +320,6 @@ class InteractorProvider(Provider):
 
     # Assets
     get_assets_interactor = provide(GetAssetsInteractor)
+
+    # Chat
+    get_chat_history_interactor = provide(GetChatHistoryInteractor)

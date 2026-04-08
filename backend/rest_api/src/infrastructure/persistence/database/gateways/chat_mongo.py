@@ -26,8 +26,18 @@ class MongoChatUserGateway(ChatUserGateway):
         """Update user data or insert if it doesn't exist."""
         await self.collection.update_one(
             {"_id": user.id},
-            {"$set": {"username": user.username, "avatar_url": user.avatar_url}},
+            {
+                "$set": {"username": user.username, "avatar_url": user.avatar_url},
+                "$setOnInsert": {"has_chat_access": False},
+            },
             upsert=True,
+        )
+
+    async def update_chat_access(self, user_id: str, *, has_access: bool) -> None:
+        """Update the chat access flag."""
+        await self.collection.update_one(
+            {"_id": user_id},
+            {"$set": {"has_chat_access": has_access}},
         )
 
     async def get_user_by_id(self, user_id: str) -> ChatUser | None:

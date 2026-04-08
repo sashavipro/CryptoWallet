@@ -1,5 +1,7 @@
 """sockets/src/presentation/http/main.py."""
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 import socketio
@@ -14,6 +16,9 @@ from src.presentation.ws.namespaces import ChatNamespace
 from src.presentation.ws.namespaces import DefaultNamespace
 from src.presentation.ws.server import sio
 
+logger = logging.getLogger(__name__)
+MAX_RETRIES = 5
+
 container = create_container()
 sio.register_namespace(DefaultNamespace("/", container=container))
 sio.register_namespace(ChatNamespace("/chat", container=container))
@@ -26,8 +31,21 @@ setup_dishka_faststream(container, faststream_app)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage the FastAPI app lifespan and handle the broker connection."""
-    await broker.start()
+    """Manage the FastAPI app lifespan and handle the broker connection with retries."""
+    for attempt in range(MAX_RETRIES):
+        try:
+            await broker.start()
+            logger.info("Successfully connected to RabbitMQ!")
+            break
+        except Exception as e:
+            if attempt == MAX_RETRIES - 1:
+                logger.exception(
+                    "Failed to connect to RabbitMQ after %s attempts.", MAX_RETRIES
+                )
+                raise
+            logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
+            await asyncio.sleep(5)
+
     yield
     await broker.close()
 

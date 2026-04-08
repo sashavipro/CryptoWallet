@@ -1,5 +1,5 @@
 let chatSocket = null;
-let selectedImageFile = null;
+let selectedImageFile = null; // Глобальная переменная для хранения выбранного файла
 
 // Кэш для хранения Promise (защита от Race Condition)
 const profileCache = {};
@@ -22,12 +22,10 @@ function fetchProfile(userId) {
         });
     }
 
-    // Если Promise уже есть в кэше, возвращаем его
     if (profileCache[userId]) {
         return profileCache[userId];
     }
 
-    // Создаем новый Promise и сразу кладем его в кэш
     profileCache[userId] = (async () => {
         try {
             const res = await fetch(`/api/v1/profile/${userId}`, {
@@ -44,7 +42,6 @@ function fetchProfile(userId) {
             console.warn("Не удалось подгрузить профиль для", userId);
         }
 
-        // Fallback в случае ошибки
         return {
             username: `User_${userId.substring(0,4)}`,
             avatar: "/static/img/default-avatar.png"
@@ -78,7 +75,7 @@ function initChatSocket() {
     const token = getCookie('access_token');
     if (!token) return;
 
-    chatSocket = io("http://localhost:8004/chat", {
+    walletSocket = io("/chat", {
         auth: { token: token },
         transports: ['websocket', 'polling']
     });
@@ -108,10 +105,19 @@ function renderMessage(msg) {
     msgDiv.className = `message ${isOwn ? 'own' : ''}`;
 
     const textContent = msg.text || msg.message_text || "";
+
+    // --- ИЗМЕНЕНИЕ: ЛОГИКА ОТРИСОВКИ КАРТИНКИ ---
     let imgHtml = '';
-    if (msg.image_url) {
-        imgHtml = `<img src="${msg.image_url}" class="message-image" alt="Attachment">`;
+    // Проверяем оба варианта: может прийти готовый URL из базы или просто ключ
+    const imageUrl = msg.image_url || (msg.image_key ? `https://my-s3-bucket.com/${msg.image_key}` : null);
+
+    if (imageUrl) {
+        // Добавляем обработчик onload, чтобы скролл сработал ПОСЛЕ загрузки большой картинки
+        imgHtml = `<img src="${imageUrl}" class="message-image" alt="Attachment" onload="scrollToBottom()">`;
     }
+
+    // Если нет ни текста, ни картинки - не рендерим пустой пузырь
+    if (!textContent && !imgHtml) return;
 
     msgDiv.innerHTML = `
         <div class="message-info">
@@ -120,7 +126,7 @@ function renderMessage(msg) {
             <span class="message-time">${timeStr}</span>
         </div>
         <div class="message-content">
-            ${escapeHtml(textContent)}
+            ${textContent ? escapeHtml(textContent) : ''}
             ${imgHtml}
         </div>
     `;
@@ -184,10 +190,11 @@ function renderOnlineUsers(users) {
     });
 }
 
+// --- ИЗМЕНЕНИЕ: ЛОГИКА РАБОТЫ С UI КАРТИНОК ---
 function setupChatUIEvents() {
     const sendBtn = document.getElementById('btnSendMsg');
     const input = document.getElementById('chatInput');
-    const fileInput = document.getElementById('chatImageInput');
+    const fileInput = document.getElementById('chatImageInput'); // Скрытый input[type=file]
     const removeImgBtn = document.getElementById('removeImageBtn');
 
     sendBtn.addEventListener('click', sendMessage);
@@ -195,47 +202,96 @@ function setupChatUIEvents() {
         if (e.key === 'Enter') sendMessage();
     });
 
+    // Когда пользователь выбрал картинку
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 selectedImageFile = e.target.files[0];
+
+                // Читаем файл локально для превью
                 const reader = new FileReader();
-                reader.onload = (e) => {
-                    document.getElementById('imagePreview').src = e.target.result;
+                reader.onload = (event) => {
+                    document.getElementById('imagePreview').src = event.target.result;
                     document.getElementById('imagePreviewContainer').style.display = 'block';
+                    // Фокус обратно на инпут текста, чтобы было удобно печатать подпись
+                    input.focus();
                 };
                 reader.readAsDataURL(selectedImageFile);
             }
         });
     }
 
+    // Когда пользователь передумал и нажал крестик на превью
     if (removeImgBtn) {
         removeImgBtn.addEventListener('click', () => {
-            selectedImageFile = null;
-            if (fileInput) fileInput.value = '';
-            document.getElementById('imagePreviewContainer').style.display = 'none';
+            clearImageSelection();
         });
     }
 }
 
+// Вспомогательная функция очистки выбранной картинки
+function clearImageSelection() {
+    selectedImageFile = null;
+    const fileInput = document.getElementById('chatImageInput');
+    if (fileInput) fileInput.value = '';
+    document.getElementById('imagePreviewContainer').style.display = 'none';
+    document.getElementById('imagePreview').src = '';
+}
+
+// --- ИЗМЕНЕНИЕ: ОТПРАВКА СООБЩЕНИЯ С КАРТИНКОЙ ---
 async function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
+
+    // Блокируем отправку, если пусто
     if (!text && !selectedImageFile) return;
 
     let imageKey = null;
 
+    // ЗАГОТОВКА ДЛЯ S3:
+    if (selectedImageFile) {
+        /* // 1. Получаем presigned URL от нашего бэкенда
+        const presignedRes = await fetch(`/api/v1/profile/generate-upload-url?filename=${selectedImageFile.name}&file_type=chat`, {
+            headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
+        });
+        const uploadData = await presignedRes.json();
+
+        // 2. Отправляем сам файл напрямую в DigitalOcean Spaces (S3)
+        await fetch(uploadData.upload_url, {
+            method: 'PUT',
+            body: selectedImageFile,
+            headers: { 'Content-Type': selectedImageFile.type }
+        });
+
+        // 3. Сохраняем ключ, чтобы передать его в сокет
+        imageKey = uploadData.file_key;
+        */
+
+        // ВРЕМЕННАЯ ЗАГЛУШКА ПОКА S3 НЕ РАБОТАЕТ:
+        console.warn("S3 upload not yet fully integrated. Sending text only or fake key.");
+        // imageKey = "fake_image_key.png"; // Можно раскомментить для теста верстки
+    }
+
+    // Отправляем всё в сокет
     if (chatSocket && chatSocket.connected) {
+        // Добавляем коллбэк функцию третьим аргументом, чтобы получить ответ
         chatSocket.emit("send_message", {
             room_id: "chat_global",
             text: text,
             image_key: imageKey,
             temp_id: crypto.randomUUID()
+        }, (response) => {
+            // Если бэкенд отбил сообщение (например, не прошло 60 секунд)
+            if (response && response.status === "error") {
+                alert(response.message); // Выскочит красивое уведомление!
+            } else {
+                // Очищаем инпуты только если сообщение ушло успешно
+                input.value = '';
+                clearImageSelection();
+            }
         });
-        input.value = '';
-        if (document.getElementById('removeImageBtn')) {
-            document.getElementById('removeImageBtn').click();
-        }
+    } else {
+        alert("Нет подключения к чату.");
     }
 }
 

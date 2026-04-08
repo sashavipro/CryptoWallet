@@ -1,9 +1,12 @@
 """sockets/src/presentation/ws/namespaces/chat.py."""
 
 import logging
+from http import HTTPStatus
 
+import httpx
 import socketio
 from dishka import AsyncContainer
+from socketio.exceptions import ConnectionRefusedError as SocketConnectionError
 
 from src.application.ports.publishers import EventPublisher
 from src.infrastructure.cache import OnlinePresenceGateway
@@ -27,15 +30,16 @@ class ChatNamespace(socketio.AsyncNamespace):
         """Handle connections specifically to the /chat channel."""
         if not auth or "token" not in auth:
             msg = "Authentication token is missing"
-            raise socketio.exceptions.ConnectionRefusedError(msg)
+            raise SocketConnectionError(msg)
 
-        payload = jwt_validator.verify_token(auth.get("token"))
+        token = auth.get("token")
+        payload = jwt_validator.verify_token(token)
         if not payload or not payload.get("sub"):
             msg = "Invalid or expired token"
-            raise socketio.exceptions.ConnectionRefusedError(msg)
+            raise SocketConnectionError(msg)
 
         user_id = payload.get("sub")
-        await self.save_session(sid, {"user_id": user_id})
+        await self.save_session(sid, {"user_id": user_id, "token": token})
 
         await self.enter_room(sid, f"user_{user_id}")
         await self.enter_room(sid, "chat_global")
@@ -86,9 +90,34 @@ class ChatNamespace(socketio.AsyncNamespace):
         """Process an incoming message from the client."""
         session = await self.get_session(sid)
         user_id = session.get("user_id")
+        token = session.get("token")
 
         if not user_id:
             return {"status": "error", "message": "Unauthorized"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.get(
+                    f"http://crypto_api:8000/api/v1/profile/{user_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+                if res.status_code == HTTPStatus.OK:
+                    profile_data = res.json()
+                    if not profile_data.get("has_chat_access", False):
+                        logger.warning(
+                            "User %s attempted to chat before the 60s limit.",
+                            user_id,
+                        )
+                        return {
+                            "status": "error",
+                            "message": (
+                                "Chat will be available 60 seconds after registration!"
+                            ),
+                        }
+        except (httpx.RequestError, ValueError):
+            logger.exception("Error verifying chat access permissions")
+            return {"status": "error", "message": "Error verifying access"}
 
         text = data.get("text", "").strip()
         image_key = data.get("image_key")

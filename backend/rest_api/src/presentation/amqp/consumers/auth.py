@@ -8,6 +8,7 @@ from faststream.rabbit import RabbitRouter
 
 from src.application.ports.gateways import ChatUserGateway
 from src.application.ports.providers import MailProvider
+from src.application.tasks.chat import grant_chat_access_task
 from src.domain.entities import ChatUser
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,15 @@ async def handle_user_registered(
     chat_user = ChatUser(id=user_id, username=username, avatar_url=None)
     await chat_user_gateway.upsert_user(chat_user)
     logger.info("User %s added to MongoDB chat_users_mongo", user_id)
+
+    try:
+        await grant_chat_access_task.kiq(user_id, delay=60)
+        logger.info(
+            "TaskIQ: The task to access the chat is scheduled for %s in 60 seconds.",
+            user_id,
+        )
+    except Exception:
+        logger.exception("TaskIQ Error: Unable to schedule the task for %s", user_id)
 
     try:
         await mail_provider.send_welcome_email(to_email=email, username=username)

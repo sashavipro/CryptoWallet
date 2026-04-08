@@ -1,38 +1,30 @@
 // Глобальные переменные
 let currentWallets = [];
-let balancePollInterval = null;
-
-let txPollInterval = null;
 let currentOpenWalletId = null;
+let walletSocket = null;
 
-// --- МАГИЯ СИНХРОНИЗАЦИИ ВКЛАДОК ---
-// Создаем канал связи между всеми открытыми вкладками нашего сайта
+function getCookie(name) {
+    let matches = document.cookie.match(new RegExp(
+        "(?:^|; )" + name.replace(/([\.$?*|{}\(\)\[\]\\\/\+^])/g, '\\$1') + "=([^;]*)"
+    ));
+    return matches ? decodeURIComponent(matches[1]) : undefined;
+}
+
 const txChannel = new BroadcastChannel('wallet_tx_channel');
-
-// Слушаем сообщения от ДРУГИХ вкладок
 txChannel.onmessage = (event) => {
     const data = event.data;
     if (data.type === 'NEW_PENDING_TX') {
-        // Если в этой вкладке открыта модалка именно этого кошелька - мгновенно рисуем транзакцию
         if (currentOpenWalletId === data.walletId) {
-            injectPendingTxToUI(data.walletId, data.txHash, data.fromAddr, data.toAddr, data.valueEth);
+            fetchAndUpdateTxs(data.walletId);
         }
-        // В любом случае запускаем таймеры обновления балансов, так как транзакция пошла
-        setTimeout(updateBalances, 5000);
-        setTimeout(updateBalances, 15000);
     }
 };
-// -----------------------------------
 
 document.addEventListener('DOMContentLoaded', () => {
     loadWallets();
+    initWalletSocket();
 
-    // Запускаем фоновое обновление балансов каждые 30 секунд
-    balancePollInterval = setInterval(updateBalances, 30000);
-
-    // Обработчик отправки транзакции
     const btnSend = document.getElementById('btnSendTx');
-
     btnSend.addEventListener('click', async () => {
         const walletId = document.getElementById('sendFromWalletId').value;
         const toAddress = document.getElementById('sendToAddress').value.trim();
@@ -67,35 +59,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const responseData = await res.json();
 
             if (res.ok) {
-                const txHash = responseData.tx_hash || responseData.hash || `pending_${Date.now()}`;
-                const wallet = currentWallets.find(w => w.id === walletId);
-                const fromAddress = wallet ? wallet.address : 'Ваш кошелек';
-
-                // Сбрасываем форму и закрываем модалку отправки
                 document.getElementById('sendToAddress').value = '';
                 document.getElementById('sendValue').value = '';
                 closeModal('sendTxModal');
 
-                // Автоматически открываем модалку истории в ЭТОЙ вкладке
-                openTxHistory(walletId, fromAddress);
-
-                // МГНОВЕННО инжектим транзакцию в ЭТУ вкладку
-                injectPendingTxToUI(walletId, txHash, fromAddress, toAddress, value);
-
-                // РАССЫЛАЕМ УВЕДОМЛЕНИЕ ДРУГИМ ВКЛАДКАМ
+                // Оповещаем другие вкладки (если они открыты)
                 txChannel.postMessage({
                     type: 'NEW_PENDING_TX',
-                    walletId: walletId,
-                    txHash: txHash,
-                    fromAddr: fromAddress,
-                    toAddr: toAddress,
-                    valueEth: value
+                    walletId: walletId
                 });
 
                 showGlobalAlert('Транзакция отправлена в сеть! Ожидайте подтверждения...');
-
-                setTimeout(updateBalances, 5000);
-                setTimeout(updateBalances, 10000);
             } else {
                 let errorMsg = "Неизвестная ошибка";
                 if (responseData.detail) {
@@ -111,7 +85,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
-// --- ФОНОВОЕ ОБНОВЛЕНИЕ БАЛАНСОВ (AJAX) ---
+function initWalletSocket() {
+    if (typeof io === 'undefined') {
+        console.error("Ошибка: Библиотека Socket.IO не загружена!");
+        return;
+    }
+
+    const token = getCookie('access_token');
+    if (!token) return;
+
+    walletSocket = io("/chat", {
+        auth: { token: token },
+        transports: ['websocket', 'polling']
+    });
+
+    walletSocket.on("transaction_status_changed", (data) => {
+        console.log("WS: Изменение статуса транзакции", data);
+
+        // Если открыта история, просто перерисовываем её свежими данными!
+        if (currentOpenWalletId === data.wallet_id) {
+            fetchAndUpdateTxs(data.wallet_id);
+        }
+
+        if (data.status === 'success') {
+            showGlobalAlert(`Транзакция ${data.tx_hash.substring(0,10)}... успешно завершена!`);
+            updateBalances();
+        } else if (data.status === 'failed') {
+            const errorReason = data.error ? `: ${data.error}` : '';
+            showGlobalAlert(`Транзакция ${data.tx_hash.substring(0,10)}... завершилась ошибкой${errorReason}`, true);
+        }
+    });
+}
+
 async function updateBalances() {
     if (!currentWallets || currentWallets.length === 0) return;
 
@@ -144,7 +149,6 @@ async function updateBalances() {
     });
 }
 
-// Загрузка кошельков
 async function loadWallets() {
     const container = document.getElementById('walletsContainer');
     try {
@@ -201,15 +205,8 @@ window.openSendModal = (walletId) => {
 window.requestFaucet = async (walletId) => {
     showGlobalAlert('Запрос отправлен в Faucet. Ожидайте...', false);
 
-    const wallet = currentWallets.find(w => w.id === walletId);
-    const address = wallet ? wallet.address : '';
-
-    // Сразу открываем модалку истории для наглядности в ЭТОЙ вкладке
-    // openTxHistory(walletId, address);
-
     try {
         const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, { method: 'POST' });
-
         const contentType = res.headers.get("content-type");
         let data = null;
         if (contentType && contentType.includes("application/json")) {
@@ -217,73 +214,21 @@ window.requestFaucet = async (walletId) => {
         }
 
         if (res.ok) {
-            showGlobalAlert('ETH успешно запрошен! Баланс обновится автоматически в течение минуты.');
-
-            const txHash = typeof data === 'string' ? data : (data?.tx_hash || data?.hash || `faucet_${Date.now()}`);
-
-            // Мгновенно инжектим в ЭТУ вкладку
-            injectPendingTxToUI(walletId, txHash, 'Faucet', address, '0.001');
-
-            // РАССЫЛАЕМ УВЕДОМЛЕНИЕ ДРУГИМ ВКЛАДКАМ
-            txChannel.postMessage({
-                type: 'NEW_PENDING_TX',
-                walletId: walletId,
-                txHash: txHash,
-                fromAddr: 'Faucet',
-                toAddr: address,
-                valueEth: '0.001'
-            });
-
-            setTimeout(updateBalances, 5000);
-            setTimeout(updateBalances, 15000);
-            setTimeout(updateBalances, 30000);
+            showGlobalAlert('ETH успешно запрошен! Ожидайте подтверждения сети.');
+            txChannel.postMessage({ type: 'NEW_PENDING_TX', walletId: walletId });
         } else {
             let errorMsg = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Ошибка сервера (Код ${res.status})`;
-            showGlobalAlert(`Ошибка Faucet: ${errorMsg}`, true);
+
+            if (errorMsg.includes('через') || errorMsg.includes('доступен')) {
+                showGlobalAlert(`⏳ ${errorMsg}`, false, true);
+            } else {
+                showGlobalAlert(`Ошибка Faucet: ${errorMsg}`, true);
+            }
         }
     } catch (e) {
         showGlobalAlert('Сбой сети или сервер не отвечает при запросе Faucet', true);
     }
 };
-
-// --- ИСТОРИЯ ТРАНЗАКЦИЙ ---
-
-// Функция для МГНОВЕННОГО отображения транзакции после клика (до того как отработает API)
-function injectPendingTxToUI(walletId, txHash, fromAddr, toAddr, valueEth) {
-    if (currentOpenWalletId !== walletId) return;
-
-    const tbody = document.getElementById('txTableBody');
-    if (tbody.children.length === 1 && tbody.children[0].cells.length === 1) {
-        tbody.innerHTML = ''; // Убираем "Загрузка..."
-    }
-
-    const safeHashId = txHash.toLowerCase();
-    if (document.getElementById(`tx-row-${safeHashId}`)) return;
-
-    const date = new Date().toLocaleString();
-    const newRow = document.createElement('tr');
-    newRow.id = `tx-row-${safeHashId}`;
-    newRow.setAttribute('data-injected-at', Date.now().toString());
-
-    const hashDisplay = txHash.startsWith('0x')
-        ? `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" style="color: #3498db;">${txHash.substring(0, 10)}...</a>`
-        : `<span style="color: #888;" title="Ожидание формирования хэша">${txHash.substring(0, 10)}...</span>`;
-
-    newRow.innerHTML = `
-        <td>${hashDisplay}</td>
-        <td>${date}</td>
-        <td title="${fromAddr}">${fromAddr.substring(0, 8)}...</td>
-        <td title="${toAddr}">${toAddr.substring(0, 8)}...</td>
-        <td><strong>${parseFloat(valueEth).toFixed(4)}</strong> ETH</td>
-        <td id="tx-status-${safeHashId}" data-status="pending"><span style="color: #f39c12; font-weight: bold;">Pending ⏳</span></td>
-    `;
-
-    tbody.insertBefore(newRow, tbody.firstChild);
-
-    newRow.style.backgroundColor = 'rgba(243, 156, 18, 0.2)';
-    newRow.style.transition = 'background-color 1s ease';
-    setTimeout(() => newRow.style.backgroundColor = '', 1500);
-}
 
 window.openTxHistory = (walletId, address) => {
     currentOpenWalletId = walletId;
@@ -294,11 +239,6 @@ window.openTxHistory = (walletId, address) => {
     document.getElementById('txHistoryModal').style.display = 'flex';
 
     fetchAndUpdateTxs(walletId);
-
-    if (txPollInterval) clearInterval(txPollInterval);
-    txPollInterval = setInterval(() => {
-        fetchAndUpdateTxs(walletId);
-    }, 10000);
 };
 
 async function fetchAndUpdateTxs(walletId) {
@@ -311,137 +251,89 @@ async function fetchAndUpdateTxs(walletId) {
 
         const txs = await res.json();
 
-        if (tbody.children.length === 1 && tbody.children[0].cells.length === 1 && txs.length > 0) {
-            tbody.innerHTML = '';
-        }
-
-        if (txs.length === 0 && (tbody.innerHTML === '' || tbody.children[0].cells.length === 1)) {
+        if (txs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Транзакций не найдено.</td></tr>';
             return;
         }
 
-        // УДАЛЕНИЕ "ПРИЗРАЧНЫХ" СТРОК
-        const currentHashes = new Set(txs.map(tx => (tx.hash || tx.tx_hash).toLowerCase()));
-        const rows = tbody.querySelectorAll('tr[id^="tx-row-"]');
-
-        rows.forEach(row => {
-            const rowHash = row.id.replace('tx-row-', '');
-            if (!currentHashes.has(rowHash)) {
-                const injectedAt = row.getAttribute('data-injected-at');
-                if (injectedAt && (Date.now() - parseInt(injectedAt) < 60000)) {
-                    return;
-                }
-                row.remove();
-            }
-        });
-
-        txs.forEach((tx, index) => {
-            const txHash = tx.hash || tx.tx_hash;
-            if (!txHash) return;
+        let newHtml = '';
+        txs.forEach((tx) => {
+            const txHash = tx.hash || tx.tx_hash || tx.id;
+            const safeHashId = txHash.toLowerCase();
 
             const rawStatus = String(tx.status || "").toLowerCase();
             const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
             const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
-            const isPending = !isError && !isSuccess && (rawStatus === "pending" || !tx.blockNumber);
 
-            let statusHtml = '<span style="color: #27ae60; font-weight: bold;">Success</span>';
-            let statusCode = 'success';
-
-            if (isError) {
+            let statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending ⏳</span>';
+            let statusCode = 'pending';
+            if (isSuccess) {
+                statusHtml = '<span style="color: #27ae60; font-weight: bold;">Success</span>';
+                statusCode = 'success';
+            } else if (isError) {
                 statusHtml = '<span style="color: #e74c3c; font-weight: bold;">Failed</span>';
                 statusCode = 'failed';
-            } else if (isPending) {
-                statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending ⏳</span>';
-                statusCode = 'pending';
             }
 
-            const safeHashId = txHash.toLowerCase();
-            const rowId = `tx-row-${safeHashId}`;
-            const existingRow = document.getElementById(rowId);
+            let valNum = parseFloat(tx.value || 0);
+            if (valNum > 1000000000) valNum = valNum / 1e18;
+            const valEth = valNum.toFixed(4);
 
-            if (existingRow) {
-                const statusCell = document.getElementById(`tx-status-${safeHashId}`);
-                const currentStatus = statusCell ? statusCell.getAttribute('data-status') : null;
+            const fromAddr = tx.from || tx.from_address || '---';
+            const toAddr = tx.to || tx.to_address || '---';
+            const txFee = tx.tx_fee ? parseFloat(tx.tx_fee).toFixed(6) : '0.0000';
 
-                if (statusCell && currentStatus !== statusCode) {
-                    statusCell.innerHTML = statusHtml;
-                    statusCell.setAttribute('data-status', statusCode);
+            const hashDisplay = txHash.startsWith('0x')
+                ? `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-hash">${txHash.substring(0, 10)}...</a>`
+                : `<span style="color: #888;" title="Ожидание формирования хэша">${txHash.substring(0, 10)}...</span>`;
 
-                    existingRow.style.backgroundColor = statusCode === 'success' ? 'rgba(39, 174, 96, 0.2)' : 'rgba(231, 76, 60, 0.2)';
-                    existingRow.style.transition = 'background-color 1s ease';
-                    setTimeout(() => existingRow.style.backgroundColor = '', 1500);
-
-                    if (statusCode === 'success') {
-                        updateBalances();
-                    }
-                }
-            } else {
-                let valNum = parseFloat(tx.value || 0);
-                if (valNum > 1000000000) valNum = valNum / 1e18;
-                const valEth = valNum.toFixed(4);
-
-                const date = tx.timeStamp ? new Date(tx.timeStamp * 1000).toLocaleString() : '---';
-                const fromAddr = tx.from || tx.from_address || '---';
-                const toAddr = tx.to || tx.to_address || '---';
-
-                const newRow = document.createElement('tr');
-                newRow.id = rowId;
-
-                const hashDisplay = txHash.startsWith('0x')
-                    ? `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" style="color: #3498db;">${txHash.substring(0, 10)}...</a>`
-                    : `<span style="color: #888;" title="Ожидание формирования хэша">${txHash.substring(0, 10)}...</span>`;
-
-                newRow.innerHTML = `
+            newHtml += `
+                <tr id="tx-row-${safeHashId}">
                     <td>${hashDisplay}</td>
-                    <td>${date}</td>
                     <td title="${fromAddr}">${fromAddr.substring(0, 8)}...</td>
                     <td title="${toAddr}">${toAddr.substring(0, 8)}...</td>
                     <td><strong>${valEth}</strong> ETH</td>
+                    <td>${txFee}</td>
                     <td id="tx-status-${safeHashId}" data-status="${statusCode}">${statusHtml}</td>
-                `;
-
-                if (index >= tbody.children.length) {
-                    tbody.appendChild(newRow);
-                } else {
-                    tbody.insertBefore(newRow, tbody.children[index]);
-                }
-
-                newRow.style.backgroundColor = 'rgba(52, 152, 219, 0.2)';
-                newRow.style.transition = 'background-color 1s ease';
-                setTimeout(() => newRow.style.backgroundColor = '', 1500);
-            }
+                </tr>
+            `;
         });
 
+        tbody.innerHTML = newHtml;
+
     } catch (e) {
-        console.error("Ошибка при фоновом обновлении транзакций:", e);
+        console.error("Ошибка при обновлении транзакций:", e);
     }
 }
 
 window.closeModal = (id) => {
     document.getElementById(id).style.display = 'none';
-
     if (id === 'txHistoryModal') {
-        if (txPollInterval) {
-            clearInterval(txPollInterval);
-            txPollInterval = null;
-        }
         currentOpenWalletId = null;
     }
 };
 
-function showGlobalAlert(message, isError = false) {
+function showGlobalAlert(message, isError = false, isWarning = false) {
     const alertDiv = document.getElementById('globalAlert');
     if (!alertDiv) {
         alert(message);
         return;
     }
     alertDiv.style.display = 'block';
-    alertDiv.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
-    alertDiv.style.color = isError ? '#721c24' : '#155724';
+
+    if (isWarning) {
+        alertDiv.style.backgroundColor = '#fff3cd';
+        alertDiv.style.color = '#856404';
+        alertDiv.style.border = '1px solid #ffeeba';
+    } else {
+        alertDiv.style.backgroundColor = isError ? '#f8d7da' : '#d4edda';
+        alertDiv.style.color = isError ? '#721c24' : '#155724';
+        alertDiv.style.border = isError ? '1px solid #f5c6cb' : '1px solid #c3e6cb';
+    }
+
     alertDiv.style.padding = '10px';
     alertDiv.style.borderRadius = '5px';
     alertDiv.style.marginBottom = '15px';
-    alertDiv.style.border = isError ? '1px solid #f5c6cb' : '1px solid #c3e6cb';
     alertDiv.textContent = message;
 
     setTimeout(() => { alertDiv.style.display = 'none'; }, 7000);

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -44,6 +42,7 @@ services:
     build:
       context: .
       dockerfile: backend/rest_api/deploy/server/Dockerfile
+    image: crypto_rest_api_image
     container_name: crypto_api
     ports:
       - "8000:8000"
@@ -61,7 +60,7 @@ services:
     build:
       context: .
       dockerfile: backend/ethereum/deploy/server/Dockerfile
-    container_name: crypto_ethereum_worker
+    container_name: crypto_ethereum
     ports:
       - "8002:8002"
     env_file:
@@ -97,6 +96,21 @@ services:
     depends_on:
       - rest_api
       - sockets_service
+
+  taskiq_worker:
+    image: crypto_rest_api_image
+    container_name: crypto_taskiq_worker
+    command: taskiq worker src.infrastructure.task_broker:taskiq_broker src.application.tasks.chat
+    ports: []
+    env_file:
+      - backend/rest_api/.env
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+    volumes:
+      - .:/app
 
 volumes:
   postgres_data:

@@ -46,25 +46,35 @@ class RequestTestnetEthInteractor:
         self.redis = redis
         self.settings = settings
 
-    async def __call__(
-        self, wallet_id: uuid.UUID, user_id: uuid.UUID
-    ) -> TransactionResponse:
-        """Request faucet ETH for the specified wallet and save the transaction."""
-        logger.info(
-            "Requesting faucet ETH for wallet: %s (User: %s)", wallet_id, user_id
-        )
+    async def execute(self, user_id: str, wallet_id: uuid.UUID) -> TransactionResponse:
+        """Process the request to send testnet ETH to a specified wallet."""
+        async with self.uow:
+            wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
 
-        wallet = await self.wallet_gateway.get_wallet_by_id(wallet_id)
-
-        if not wallet or wallet.user_id != user_id:
+        if not wallet:
             raise WalletNotFoundException
 
         limit_key = f"faucet_limit:{user_id}"
 
         if self.settings.FAUCET_RATE_LIMIT_ENABLED:
-            if await self.redis.exists(limit_key):
+            ttl = await self.redis.ttl(limit_key)
+            if ttl > 0:
                 logger.warning("User %s exceeded faucet rate limit", user_id)
-                raise FaucetRateLimitException(self.settings.FAUCET_RATE_LIMIT_HOURS)
+
+                hours = ttl // 3600
+                minutes = (ttl % 3600) // 60
+
+                if hours > 0:
+                    time_left = f"{hours} h. {minutes} min."
+                else:
+                    time_left = f"{minutes} min."
+
+                error_message = (
+                    "You have already requested testnet ETH. "
+                    f"The next request will be available in {time_left}"
+                )
+
+                raise FaucetRateLimitException(error_message)
 
         tx_hash = await self.worker_client.request_faucet(address=wallet.address)
 
@@ -96,6 +106,6 @@ class RequestTestnetEthInteractor:
             to_address=tx.to_address,
             value=tx.value,
             tx_fee=tx.tx_fee,
-            status=tx.status.value,
+            status=tx.status,
             created_at=tx.created_at,
         )
