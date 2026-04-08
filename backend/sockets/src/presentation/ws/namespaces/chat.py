@@ -140,3 +140,27 @@ class ChatNamespace(socketio.AsyncNamespace):
             )
 
         return {"status": "processing"}
+
+    async def on_get_tx_history(self, sid: str, data: dict):
+        """Fetch transaction history for a wallet via internal API call."""
+        session = await self.get_session(sid)
+        user_id = session.get("user_id")
+        token = session.get("token")
+        wallet_id = data.get("wallet_id")
+
+        if not user_id or not wallet_id:
+            return {"status": "error", "message": "Unauthorized or missing wallet_id"}
+
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.get(
+                    f"http://crypto_api:8000/api/v1/transactions/wallet/{wallet_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+
+                if res.status_code == HTTPStatus.OK:
+                    return {"status": "success", "data": res.json()}
+                return {"status": "error", "message": "Failed to fetch transactions"}
+        except Exception:
+            logger.exception("Error fetching tx history via WS")
+            return {"status": "error", "message": "Internal error fetching history"}

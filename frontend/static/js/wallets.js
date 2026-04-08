@@ -103,8 +103,8 @@ function initWalletSocket() {
         console.log("WS: Изменение статуса транзакции", data);
 
         // Если открыта история, просто перерисовываем её свежими данными!
-        if (currentOpenWalletId === data.wallet_id) {
-            fetchAndUpdateTxs(data.wallet_id);
+        if (currentOpenWalletId && (currentOpenWalletId === data.wallet_id || !data.wallet_id)) {
+            fetchAndUpdateTxs(currentOpenWalletId);
         }
 
         if (data.status === 'success') {
@@ -220,7 +220,7 @@ window.requestFaucet = async (walletId) => {
             let errorMsg = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Ошибка сервера (Код ${res.status})`;
 
             if (errorMsg.includes('через') || errorMsg.includes('доступен')) {
-                showGlobalAlert(`⏳ ${errorMsg}`, false, true);
+                showGlobalAlert(` ${errorMsg}`, false, true);
             } else {
                 showGlobalAlert(`Ошибка Faucet: ${errorMsg}`, true);
             }
@@ -247,7 +247,10 @@ async function fetchAndUpdateTxs(walletId) {
 
     try {
         const res = await fetch(`/api/v1/transactions/wallet/${walletId}`);
-        if (!res.ok) return;
+        if (!res.ok) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>';
+            return;
+        }
 
         const txs = await res.json();
 
@@ -265,7 +268,7 @@ async function fetchAndUpdateTxs(walletId) {
             const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
             const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
 
-            let statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending ⏳</span>';
+            let statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending</span>';
             let statusCode = 'pending';
             if (isSuccess) {
                 statusHtml = '<span style="color: #27ae60; font-weight: bold;">Success</span>';
@@ -283,9 +286,12 @@ async function fetchAndUpdateTxs(walletId) {
             const toAddr = tx.to || tx.to_address || '---';
             const txFee = tx.tx_fee ? parseFloat(tx.tx_fee).toFixed(6) : '0.0000';
 
-            const hashDisplay = txHash.startsWith('0x')
-                ? `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-hash">${txHash.substring(0, 10)}...</a>`
-                : `<span style="color: #888;" title="Ожидание формирования хэша">${txHash.substring(0, 10)}...</span>`;
+            let hashDisplay;
+            if (txHash.startsWith('0x')) {
+                hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-hash" title="Посмотреть в Etherscan">${txHash.substring(0, 15)}...</a>`;
+            } else {
+                hashDisplay = `<span style="color: #888;" title="Ожидание формирования хэша сети">Ожидание...</span>`;
+            }
 
             newHtml += `
                 <tr id="tx-row-${safeHashId}">
