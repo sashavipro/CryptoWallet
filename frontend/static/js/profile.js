@@ -402,8 +402,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/v1/profile/me/stats');
             if (res.ok) {
                 const stats = await res.json();
-                if (stats.messages_count !== undefined) {
-                    statMessages.textContent = stats.messages_count;
+                // Используем total_messages, так как DTO возвращает именно его
+                if (stats.total_messages !== undefined) {
+                    statMessages.textContent = stats.total_messages;
+                } else if (stats.messages_count !== undefined) {
+                    statMessages.textContent = stats.messages_count; // на случай вебсокета
                 }
             }
         } catch (e) {
@@ -430,26 +433,32 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     loadStats();
 
-    // Инициализируем соединение с неймспейсом транзакций для получения статов
-    const txSocket = io("/transaction");
+    // Получаем токен с помощью глобальной функции из main.js
+    const token = getCookie('access_token');
+
+    // Инициализируем соединение с неймспейсом транзакций с передачей токена
+    const txSocket = io("/transaction", {
+        auth: { token: token },
+        transports: ['websocket', 'polling']
+    });
 
     txSocket.on("stats_updated", (data) => {
-    console.log("Stats updated via WS:", data);
+        console.log("Stats updated via WS:", data);
 
-    const statMessages = document.getElementById('statMessages');
-    const statWallets = document.getElementById('statWallets');
+        const statMessages = document.getElementById('statMessages');
+        const statWallets = document.getElementById('statWallets');
 
-    if (statMessages) {
-        statMessages.textContent = data.messages_count;
-        // Добавим простой эффект вспышки (зеленый цвет), что данные обновились
-        statMessages.style.color = 'green';
-        setTimeout(() => statMessages.style.color = '', 1000);
-    }
+        if (statMessages) {
+            statMessages.textContent = data.messages_count;
+            // Добавим простой эффект вспышки (зеленый цвет), что данные обновились
+            statMessages.style.color = 'green';
+            setTimeout(() => statMessages.style.color = '', 1000);
+        }
 
-    if (statWallets) {
-        statWallets.textContent = data.wallets_count;
-        statWallets.style.color = 'green';
-        setTimeout(() => statWallets.style.color = '', 1000);
-    }
-});
+        if (statWallets) {
+            statWallets.textContent = data.wallets_count;
+            statWallets.style.color = 'green';
+            setTimeout(() => statWallets.style.color = '', 1000);
+        }
+    });
 });
