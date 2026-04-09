@@ -45,7 +45,6 @@ async def create_wallet(
     request: CreateWalletRequest = Body(...),  # noqa: B008
 ) -> WalletResponse:
     """Create a new wallet."""
-    request.user_id = user_id
     return await interactor(user_id=user_id, request=request)
 
 
@@ -67,7 +66,6 @@ async def import_existing_wallet(
     request: ImportWalletRequest = Body(...),  # noqa: B008
 ) -> WalletResponse:
     """Import an existing wallet."""
-    request.user_id = user_id
     return await interactor(user_id=user_id, request=request)
 
 

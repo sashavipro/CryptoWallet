@@ -1,9 +1,9 @@
 """sockets/src/presentation/ws/namespaces/__init__.py."""
 
 from .chat import ChatNamespace
-from .default import DefaultNamespace
+from .transaction import TransactionNamespace
 
 __all__ = (
     "ChatNamespace",
-    "DefaultNamespace",
+    "TransactionNamespace",
 )

@@ -1,6 +1,8 @@
 """rest_api/src/application/interactors/profile.py."""
 
 import uuid
+from datetime import UTC
+from datetime import datetime
 
 from src.application.dtos.request import ChangePasswordRequest
 from src.application.dtos.request import UpdateUserRequest
@@ -17,6 +19,8 @@ from src.domain.value_objects.user import Username
 from src.domain.value_objects.user.password import PasswordHash
 from src.domain.value_objects.user.password import RawPassword
 
+CHAT_ACCESS_DELAY_SECONDS = 60
+
 
 class GetUserInteractor:
     """Use Case for retrieving the current user's profile."""
@@ -31,6 +35,10 @@ class GetUserInteractor:
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
 
+        now = datetime.now(UTC)
+        time_since_registration = (now - user.created_at).total_seconds()
+        has_chat_access = time_since_registration >= CHAT_ACCESS_DELAY_SECONDS
+
         return UserResponse(
             id=user.id,
             email=user.email,
@@ -38,6 +46,7 @@ class GetUserInteractor:
             is_active=user.is_active,
             created_at=user.created_at,
             avatar_url=user.avatar_url,
+            has_chat_access=has_chat_access,  # Добавляем флаг!
         )
 
 
@@ -54,10 +63,15 @@ class GetOtherProfileInteractor:
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
 
+        now = datetime.now(UTC)
+        time_since_registration = (now - user.created_at).total_seconds()
+        has_chat_access = time_since_registration >= CHAT_ACCESS_DELAY_SECONDS
+
         return PublicProfileResponse(
             id=user.id,
             username=user.username,
             avatar_url=user.avatar_url,
+            has_chat_access=has_chat_access,
         )
 
 

@@ -9,7 +9,6 @@ class CreateWalletRequest:
     """DTO for creating a new crypto wallet from scratch."""
 
     asset_id: uuid.UUID
-    user_id: uuid.UUID | None = None
 
 
 @dataclass
@@ -18,4 +17,3 @@ class ImportWalletRequest:
 
     asset_id: uuid.UUID
     private_key: str
-    user_id: uuid.UUID | None = None

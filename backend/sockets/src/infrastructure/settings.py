@@ -31,7 +31,7 @@ class SecuritySettings(BaseSettings):
 class RabbitMQSettings(BaseSettings):
     """RabbitMQ configuration."""
 
-    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
+    RABBITMQ_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -41,7 +41,17 @@ class RabbitMQSettings(BaseSettings):
 class RedisSettings(BaseSettings):
     """Redis configuration."""
 
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str
+
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+
+class ApiSettings(BaseSettings):
+    """Settings for internal API communication."""
+
+    API_SERVICE_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
@@ -51,3 +61,4 @@ class RedisSettings(BaseSettings):
 security_settings = SecuritySettings()
 mq_settings = RabbitMQSettings()
 redis_settings = RedisSettings()
+api_settings = ApiSettings()

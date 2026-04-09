@@ -7,6 +7,7 @@ from typing import Any
 
 from eth_account import Account
 from web3 import AsyncWeb3
+from web3 import WebSocketProvider
 from web3.exceptions import TransactionNotFound
 from web3.middleware.attrdict import AttributeDictMiddleware
 from web3.middleware.pythonic import PythonicMiddleware
@@ -42,7 +43,7 @@ class Web3ProviderImpl(Web3Provider):
         for url in self.rpc_nodes:
             try:
                 if url.startswith("ws"):
-                    provider = AsyncWeb3.AsyncWebsocketProvider(url)
+                    provider = WebSocketProvider(url)
                 else:
                     provider = AsyncWeb3.AsyncHTTPProvider(
                         url, request_kwargs={"timeout": 5}

@@ -1,13 +1,12 @@
 """sockets/src/presentation/ws/namespaces/chat.py."""
 
 import logging
-from http import HTTPStatus
 
-import httpx
 import socketio
 from dishka import AsyncContainer
-from socketio.exceptions import ConnectionRefusedError as SocketConnectionError
+from socketio.exceptions import ConnectionRefusedError as SocketConnectionRefusedError
 
+from src.application.ports.providers.api_client import CryptoApiClient
 from src.application.ports.publishers import EventPublisher
 from src.infrastructure.cache import OnlinePresenceGateway
 from src.infrastructure.providers import JwtValidator
@@ -30,13 +29,13 @@ class ChatNamespace(socketio.AsyncNamespace):
         """Handle connections specifically to the /chat channel."""
         if not auth or "token" not in auth:
             msg = "Authentication token is missing"
-            raise SocketConnectionError(msg)
+            raise SocketConnectionRefusedError(msg)
 
         token = auth.get("token")
         payload = jwt_validator.verify_token(token)
         if not payload or not payload.get("sub"):
             msg = "Invalid or expired token"
-            raise SocketConnectionError(msg)
+            raise SocketConnectionRefusedError(msg)
 
         user_id = payload.get("sub")
         await self.save_session(sid, {"user_id": user_id, "token": token})
@@ -95,29 +94,21 @@ class ChatNamespace(socketio.AsyncNamespace):
         if not user_id:
             return {"status": "error", "message": "Unauthorized"}
 
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(
-                    f"http://crypto_api:8000/api/v1/profile/{user_id}",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
+        async with self.container() as request_container:
+            api_client = await request_container.get(CryptoApiClient)
+            profile_data = await api_client.get_user_profile(user_id, token)
 
-                if res.status_code == HTTPStatus.OK:
-                    profile_data = res.json()
-                    if not profile_data.get("has_chat_access", False):
-                        logger.warning(
-                            "User %s attempted to chat before the 60s limit.",
-                            user_id,
-                        )
-                        return {
-                            "status": "error",
-                            "message": (
-                                "Chat will be available 60 seconds after registration!"
-                            ),
-                        }
-        except (httpx.RequestError, ValueError):
-            logger.exception("Error verifying chat access permissions")
-            return {"status": "error", "message": "Error verifying access"}
+            if not profile_data or not profile_data.get("has_chat_access", False):
+                logger.warning(
+                    "User %s attempted to chat without access.",
+                    user_id,
+                )
+                return {
+                    "status": "error",
+                    "message": (
+                        "Chat will be available 60 seconds after registration!"
+                    ),
+                }
 
         text = data.get("text", "").strip()
         image_key = data.get("image_key")
@@ -140,27 +131,3 @@ class ChatNamespace(socketio.AsyncNamespace):
             )
 
         return {"status": "processing"}
-
-    async def on_get_tx_history(self, sid: str, data: dict):
-        """Fetch transaction history for a wallet via internal API call."""
-        session = await self.get_session(sid)
-        user_id = session.get("user_id")
-        token = session.get("token")
-        wallet_id = data.get("wallet_id")
-
-        if not user_id or not wallet_id:
-            return {"status": "error", "message": "Unauthorized or missing wallet_id"}
-
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(
-                    f"http://crypto_api:8000/api/v1/transactions/wallet/{wallet_id}",
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-
-                if res.status_code == HTTPStatus.OK:
-                    return {"status": "success", "data": res.json()}
-                return {"status": "error", "message": "Failed to fetch transactions"}
-        except Exception:
-            logger.exception("Error fetching tx history via WS")
-            return {"status": "error", "message": "Internal error fetching history"}

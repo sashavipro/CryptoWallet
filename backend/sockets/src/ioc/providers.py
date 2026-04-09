@@ -7,12 +7,16 @@ from dishka import Scope
 from dishka import provide
 from redis.asyncio import Redis
 
+from src.application.ports.providers.api_client import CryptoApiClient
 from src.application.ports.publishers.event_publisher import EventPublisher
 from src.infrastructure.cache.presence import OnlinePresenceGateway
 from src.infrastructure.message_broker.event_publisher import EventPublisherImpl
+from src.infrastructure.providers.api_client import CryptoApiClientImpl
+from src.infrastructure.settings import ApiSettings
 from src.infrastructure.settings import RabbitMQSettings
 from src.infrastructure.settings import RedisSettings
 from src.infrastructure.settings import SecuritySettings
+from src.infrastructure.settings import api_settings
 from src.infrastructure.settings import mq_settings
 from src.infrastructure.settings import redis_settings
 from src.infrastructure.settings import security_settings
@@ -38,6 +42,11 @@ class SettingsProvider(Provider):
         """Provide the RabbitMQ configuration settings."""
         return mq_settings
 
+    @provide
+    def provide_api_settings(self) -> ApiSettings:
+        """Provide the settings for internal API communication."""
+        return api_settings
+
 
 class InfrastructureProvider(Provider):
     """Infrastructure dependency provider (cache, broker, etc.)."""
@@ -57,3 +66,4 @@ class InfrastructureProvider(Provider):
         return OnlinePresenceGateway(redis=redis)
 
     event_publisher = provide(EventPublisherImpl, provides=EventPublisher)
+    api_client = provide(CryptoApiClientImpl, provides=CryptoApiClient)

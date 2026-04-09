@@ -15,6 +15,7 @@ class UserResponse:
     is_active: bool
     created_at: datetime
     avatar_url: str | None = None
+    has_chat_access: bool = True
 
 
 @dataclass
@@ -24,6 +25,7 @@ class PublicProfileResponse:
     id: uuid.UUID
     username: str
     avatar_url: str | None = None
+    has_chat_access: bool = True
 
 
 @dataclass

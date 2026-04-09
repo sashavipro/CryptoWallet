@@ -429,4 +429,27 @@ document.addEventListener('DOMContentLoaded', () => {
         loadWallets();
     });
     loadStats();
+
+    // Инициализируем соединение с неймспейсом транзакций для получения статов
+    const txSocket = io("/transaction");
+
+    txSocket.on("stats_updated", (data) => {
+    console.log("Stats updated via WS:", data);
+
+    const statMessages = document.getElementById('statMessages');
+    const statWallets = document.getElementById('statWallets');
+
+    if (statMessages) {
+        statMessages.textContent = data.messages_count;
+        // Добавим простой эффект вспышки (зеленый цвет), что данные обновились
+        statMessages.style.color = 'green';
+        setTimeout(() => statMessages.style.color = '', 1000);
+    }
+
+    if (statWallets) {
+        statWallets.textContent = data.wallets_count;
+        statWallets.style.color = 'green';
+        setTimeout(() => statWallets.style.color = '', 1000);
+    }
+});
 });

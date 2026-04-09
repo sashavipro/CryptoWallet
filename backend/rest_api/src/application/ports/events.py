@@ -12,3 +12,9 @@ class EventPublisher(Protocol):
     ) -> None:
         """Publish an event indicating a new user has registered."""
         ...
+
+    async def publish_stats_updated(
+        self, user_id: uuid.UUID, messages_count: int, wallets_count: int
+    ) -> None:
+        """Publish an event to notify the user that their stats have changed."""
+        ...

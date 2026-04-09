@@ -8,6 +8,8 @@ from src.application.dtos.request.wallet import CreateWalletRequest
 from src.application.dtos.request.wallet import ImportWalletRequest
 from src.application.dtos.response.wallet import WalletBalanceResponse
 from src.application.dtos.response.wallet import WalletResponse
+from src.application.ports.events import EventPublisher
+from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways.uow import UnitOfWork
 from src.application.ports.gateways.wallet import WalletGateway
 from src.application.ports.providers.worker_client import EthereumWorkerClient
@@ -25,13 +27,15 @@ logger = logging.getLogger(__name__)
 class CreateWalletInteractor:
     """Use case for generating a new EVM wallet via RPC to stateless worker."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         wallet_gateway: WalletGateway,
         uow: UnitOfWork,
         id_generator: IdGenerator,
         time_provider: TimeProvider,
         worker_client: EthereumWorkerClient,
+        event_publisher: EventPublisher,
+        stats_gateway: StatsGateway,
     ) -> None:
         """Initialize the interactor with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -39,6 +43,8 @@ class CreateWalletInteractor:
         self.id_generator = id_generator
         self.time_provider = time_provider
         self.worker_client = worker_client
+        self.event_publisher = event_publisher
+        self.stats_gateway = stats_gateway
 
     async def __call__(
         self, user_id: uuid.UUID, request: CreateWalletRequest
@@ -67,6 +73,10 @@ class CreateWalletInteractor:
         async with self.uow:
             await self.wallet_gateway.add_wallet(wallet)
 
+        m_count = await self.stats_gateway.get_total_messages(user_id)
+        w_count = await self.stats_gateway.get_wallets_count(user_id)
+        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)
+
         return WalletResponse(
             id=wallet.id,
             user_id=wallet.user_id,
@@ -81,13 +91,15 @@ class CreateWalletInteractor:
 class ImportWalletInteractor:
     """Use case for importing an existing wallet using a private key."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         wallet_gateway: WalletGateway,
         uow: UnitOfWork,
         id_generator: IdGenerator,
         time_provider: TimeProvider,
         worker_client: EthereumWorkerClient,
+        event_publisher: EventPublisher,
+        stats_gateway: StatsGateway,
     ) -> None:
         """Initialize the interactor with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -95,6 +107,8 @@ class ImportWalletInteractor:
         self.id_generator = id_generator
         self.time_provider = time_provider
         self.worker_client = worker_client
+        self.event_publisher = event_publisher
+        self.stats_gateway = stats_gateway
 
     async def __call__(
         self, user_id: uuid.UUID, request: ImportWalletRequest
@@ -132,6 +146,10 @@ class ImportWalletInteractor:
 
         async with self.uow:
             await self.wallet_gateway.add_wallet(wallet)
+
+        m_count = await self.stats_gateway.get_total_messages(user_id)
+        w_count = await self.stats_gateway.get_wallets_count(user_id)
+        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)
 
         return WalletResponse(
             id=wallet.id,
@@ -221,10 +239,18 @@ class GetBalanceInteractor:
 class DeleteWalletInteractor:
     """Use case for deleting a wallet."""
 
-    def __init__(self, wallet_gateway: WalletGateway, uow: UnitOfWork) -> None:
+    def __init__(
+        self,
+        wallet_gateway: WalletGateway,
+        uow: UnitOfWork,
+        event_publisher: EventPublisher,
+        stats_gateway: StatsGateway,
+    ) -> None:
         """Initialize the interactor with a wallet gateway and Unit of Work."""
         self.wallet_gateway = wallet_gateway
         self.uow = uow
+        self.event_publisher = event_publisher
+        self.stats_gateway = stats_gateway
 
     async def __call__(self, wallet_id: uuid.UUID, user_id: uuid.UUID) -> None:
         """Delete a specific wallet from the database."""
@@ -237,3 +263,7 @@ class DeleteWalletInteractor:
 
         async with self.uow:
             await self.wallet_gateway.delete_wallet(wallet_id)
+
+        m_count = await self.stats_gateway.get_total_messages(user_id)
+        w_count = await self.stats_gateway.get_wallets_count(user_id)
+        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)

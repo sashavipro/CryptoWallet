@@ -39,4 +39,4 @@ async def request_testnet_eth(
     interactor: FromDishka[RequestTestnetEthInteractor],
 ) -> TransactionResponse:
     """Request testnet ETH from the faucet."""
-    return await interactor(wallet_id=wallet_id, user_id=user_id)
+    return await interactor.execute(wallet_id=wallet_id, user_id=user_id)

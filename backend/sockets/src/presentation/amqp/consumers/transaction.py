@@ -32,6 +32,6 @@ async def handle_tx_status_update(payload: dict) -> None:
             "message": f"Транзакция перешла в статус {status}",
         },
         room=f"user_{user_id}",
-        namespace="/chat",
+        namespace="/transaction",
     )
     logger.info("WS: Sent tx %s status (%s) to user %s", tx_hash, status, user_id)

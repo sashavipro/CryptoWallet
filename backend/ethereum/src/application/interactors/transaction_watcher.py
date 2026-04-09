@@ -22,7 +22,7 @@ class CheckTransactionStatusInteractor:
         receipt = await self.web3_provider.get_transaction_receipt(tx_hash)
 
         if not receipt:
-            return None  # Всё ещё Pending
+            return None
 
         status_code = receipt.get("status")
         is_success = status_code == 1

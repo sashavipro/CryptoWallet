@@ -13,15 +13,15 @@ from src.infrastructure.message_broker.broker import broker
 from src.ioc.container import create_container
 from src.presentation.amqp.consumers import router as amqp_router
 from src.presentation.ws.namespaces import ChatNamespace
-from src.presentation.ws.namespaces import DefaultNamespace
+from src.presentation.ws.namespaces import TransactionNamespace
 from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 MAX_RETRIES = 5
 
 container = create_container()
-sio.register_namespace(DefaultNamespace("/", container=container))
 sio.register_namespace(ChatNamespace("/chat", container=container))
+sio.register_namespace(TransactionNamespace("/transaction", container=container))
 
 broker.include_router(amqp_router)
 

@@ -6,6 +6,9 @@ from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
 from faststream.rabbit import RabbitRouter
 
+from src.application.interactors import IncrementTotalMessagesInteractor
+from src.application.ports.events import EventPublisher
+from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways.chat import ChatMessageGateway
 from src.domain.entities.chat import ChatMessage
 from src.infrastructure.message_broker.broker import broker
@@ -20,6 +23,9 @@ router = RabbitRouter()
 async def process_chat_message(
     payload: dict,
     message_gateway: FromDishka[ChatMessageGateway],
+    stats_interactor: FromDishka[IncrementTotalMessagesInteractor],
+    event_publisher: FromDishka[EventPublisher],
+    stats_gateway: FromDishka[StatsGateway],
 ) -> None:
     """Receive messages from sockets, saves them to MongoDB, and broadcast back."""
     try:
@@ -33,6 +39,13 @@ async def process_chat_message(
 
         await message_gateway.add_message(message)
         logger.info("Message saved to Mongo! ID: %s", message.id)
+
+        await stats_interactor(user_id=user_id)
+
+        m_count = await stats_gateway.get_total_messages(user_id)
+        w_count = await stats_gateway.get_wallets_count(user_id)
+
+        await event_publisher.publish_stats_updated(user_id, m_count, w_count)
 
         broadcast_payload = {
             "id": str(message.id),

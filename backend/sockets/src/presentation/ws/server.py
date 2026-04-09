@@ -28,12 +28,12 @@ async def global_connect(sid: str, environ: dict, auth: dict | None):
     """Global Handshake (authentication)."""
     if not auth or "token" not in auth:
         error_msg = "Authentication token is missing"
-        raise socketio.exceptions.ConnectionRefusedError(error_msg)
+        raise ConnectionRefusedError(error_msg)
 
     payload = jwt_validator.verify_token(auth.get("token"))
     if not payload or not payload.get("sub"):
         error_msg = "Invalid token"
-        raise socketio.exceptions.ConnectionRefusedError(error_msg)
+        raise ConnectionRefusedError(error_msg)
 
     async with sio.session(sid) as session:
         session["user_id"] = payload.get("sub")

@@ -102,17 +102,27 @@ function initWalletSocket() {
     walletSocket.on("transaction_status_changed", (data) => {
         console.log("WS: Изменение статуса транзакции", data);
 
-        // Если открыта история, просто перерисовываем её свежими данными!
-        if (currentOpenWalletId && (currentOpenWalletId === data.wallet_id || !data.wallet_id)) {
+        if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
             fetchAndUpdateTxs(currentOpenWalletId);
         }
 
-        if (data.status === 'success') {
-            showGlobalAlert(`Транзакция ${data.tx_hash.substring(0,10)}... успешно завершена!`);
-            updateBalances();
-        } else if (data.status === 'failed') {
+        const status = String(data.status || "").toLowerCase();
+        const hashDisplay = data.tx_hash ? data.tx_hash.substring(0, 10) : '...';
+
+        if (status === 'success' || status === '1') {
+            showGlobalAlert(`Транзакция ${hashDisplay} успешно завершена!`);
+
+            // ИСПРАВЛЕНИЕ: Каскадное обновление баланса
+            // Ждем, пока RPC-ноды обновят свой внутренний стейт после майнинга блока
+            updateBalances(); // Пробуем сразу
+            setTimeout(() => updateBalances(), 3000); // Пробуем через 3 секунды
+            setTimeout(() => updateBalances(), 7000); // Контрольная проверка через 7 секунд
+
+        } else if (status === 'failed' || status === '0') {
             const errorReason = data.error ? `: ${data.error}` : '';
-            showGlobalAlert(`Транзакция ${data.tx_hash.substring(0,10)}... завершилась ошибкой${errorReason}`, true);
+            showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой${errorReason}`, true);
+        } else if (status === 'pending') {
+            showGlobalAlert(`Транзакция отправлена в сеть. Ожидаем майнинга...`, false, true);
         }
     });
 }
@@ -241,24 +251,34 @@ window.openTxHistory = (walletId, address) => {
     fetchAndUpdateTxs(walletId);
 };
 
-async function fetchAndUpdateTxs(walletId) {
+function fetchAndUpdateTxs(walletId) {
     if (currentOpenWalletId !== walletId) return;
     const tbody = document.getElementById('txTableBody');
 
-    try {
-        const res = await fetch(`/api/v1/transactions/wallet/${walletId}`);
-        if (!res.ok) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>';
+    // 1. Проверяем, что вебсокет жив
+    if (!walletSocket || !walletSocket.connected) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
+        return;
+    }
+
+    // 2. Запрашиваем историю через WebSocket (вместо HTTP fetch)
+    walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
+
+        // Обработка ошибки от бэкенда
+        if (!response || response.status === "error") {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки истории: ${response?.message || 'Неизвестная ошибка'}</td></tr>`;
             return;
         }
 
-        const txs = await res.json();
+        const txs = response.data;
 
+        // Если транзакций нет
         if (txs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Транзакций не найдено.</td></tr>';
             return;
         }
 
+        // 3. Рендерим HTML
         let newHtml = '';
         txs.forEach((tx) => {
             const txHash = tx.hash || tx.tx_hash || tx.id;
@@ -286,6 +306,7 @@ async function fetchAndUpdateTxs(walletId) {
             const toAddr = tx.to || tx.to_address || '---';
             const txFee = tx.tx_fee ? parseFloat(tx.tx_fee).toFixed(6) : '0.0000';
 
+            // Ваша отличная логика ссылок на Etherscan
             let hashDisplay;
             if (txHash.startsWith('0x')) {
                 hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-hash" title="Посмотреть в Etherscan">${txHash.substring(0, 15)}...</a>`;
@@ -306,10 +327,7 @@ async function fetchAndUpdateTxs(walletId) {
         });
 
         tbody.innerHTML = newHtml;
-
-    } catch (e) {
-        console.error("Ошибка при обновлении транзакций:", e);
-    }
+    });
 }
 
 window.closeModal = (id) => {

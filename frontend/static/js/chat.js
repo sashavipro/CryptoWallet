@@ -75,7 +75,7 @@ function initChatSocket() {
     const token = getCookie('access_token');
     if (!token) return;
 
-    walletSocket = io("/chat", {
+    chatSocket = io("/chat", {
         auth: { token: token },
         transports: ['websocket', 'polling']
     });
