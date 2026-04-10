@@ -436,29 +436,43 @@ document.addEventListener('DOMContentLoaded', () => {
     // Получаем токен с помощью глобальной функции из main.js
     const token = getCookie('access_token');
 
-    // Инициализируем соединение с неймспейсом транзакций с передачей токена
-    const txSocket = io("/transaction", {
-        auth: { token: token },
-        transports: ['websocket', 'polling']
-    });
+    // Проверяем, загрузилась ли библиотека
+    if (typeof io === 'undefined') {
+        console.error("Ошибка: Библиотека Socket.IO не загружена! Проверьте base.html.");
+    } else {
+        // Инициализируем соединение с неймспейсом транзакций
+        const txSocket = io("/transaction", {
+            auth: { token: token },
+            transports: ['websocket'] // Жестко требуем вебсокет, чтобы увидеть его в Network
+        });
 
-    txSocket.on("stats_updated", (data) => {
-        console.log("Stats updated via WS:", data);
+        // Слушаем успешное подключение
+        txSocket.on("connect", () => {
+            console.log("Успешно подключились к WS /transaction! ID сессии:", txSocket.id);
+        });
 
-        const statMessages = document.getElementById('statMessages');
-        const statWallets = document.getElementById('statWallets');
+        // Слушаем ошибки подключения (например, неверный токен)
+        txSocket.on("connect_error", (err) => {
+            console.error("Ошибка подключения к WS /transaction:", err.message);
+        });
 
-        if (statMessages) {
-            statMessages.textContent = data.messages_count;
-            // Добавим простой эффект вспышки (зеленый цвет), что данные обновились
-            statMessages.style.color = 'green';
-            setTimeout(() => statMessages.style.color = '', 1000);
-        }
+        // Реактивное обновление статистики
+        txSocket.on("stats_updated", (data) => {
+            console.log("Получены новые данные статистики по WS:", data);
+            const statMessages = document.getElementById('statMessages');
+            const statWallets = document.getElementById('statWallets');
 
-        if (statWallets) {
-            statWallets.textContent = data.wallets_count;
-            statWallets.style.color = 'green';
-            setTimeout(() => statWallets.style.color = '', 1000);
-        }
-    });
+            if (data.messages_count !== undefined && statMessages) {
+                statMessages.textContent = data.messages_count;
+                statMessages.style.color = 'green';
+                setTimeout(() => statMessages.style.color = '', 1000);
+            }
+
+            if (data.wallets_count !== undefined && statWallets) {
+                statWallets.textContent = data.wallets_count;
+                statWallets.style.color = 'green';
+                setTimeout(() => statWallets.style.color = '', 1000);
+            }
+        });
+    }
 });

@@ -25,13 +25,18 @@ class EventPublisherImpl(EventPublisher):
         await broker.publish(payload, queue="user_events.registered")
 
     async def publish_stats_updated(
-        self, user_id: uuid.UUID, messages_count: int, wallets_count: int
+        self,
+        user_id: uuid.UUID,
+        messages_count: int | None = None,
+        wallets_count: int | None = None,
     ) -> None:
         """Publish an event to notify that user statistics have been updated."""
-        payload = {
-            "user_id": str(user_id),
-            "messages_count": messages_count,
-            "wallets_count": wallets_count,
-        }
+        payload = {"user_id": str(user_id)}
+
+        if messages_count is not None:
+            payload["messages_count"] = messages_count
+        if wallets_count is not None:
+            payload["wallets_count"] = wallets_count
+
         logger.info("Publishing stats update for user: %s", user_id)
         await broker.publish(payload, queue="stats.updated")

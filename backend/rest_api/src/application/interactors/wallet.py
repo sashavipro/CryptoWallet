@@ -73,9 +73,8 @@ class CreateWalletInteractor:
         async with self.uow:
             await self.wallet_gateway.add_wallet(wallet)
 
-        m_count = await self.stats_gateway.get_total_messages(user_id)
         w_count = await self.stats_gateway.get_wallets_count(user_id)
-        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)
+        await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
 
         return WalletResponse(
             id=wallet.id,
@@ -147,9 +146,8 @@ class ImportWalletInteractor:
         async with self.uow:
             await self.wallet_gateway.add_wallet(wallet)
 
-        m_count = await self.stats_gateway.get_total_messages(user_id)
         w_count = await self.stats_gateway.get_wallets_count(user_id)
-        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)
+        await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
 
         return WalletResponse(
             id=wallet.id,
@@ -264,6 +262,5 @@ class DeleteWalletInteractor:
         async with self.uow:
             await self.wallet_gateway.delete_wallet(wallet_id)
 
-        m_count = await self.stats_gateway.get_total_messages(user_id)
         w_count = await self.stats_gateway.get_wallets_count(user_id)
-        await self.event_publisher.publish_stats_updated(user_id, m_count, w_count)
+        await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)

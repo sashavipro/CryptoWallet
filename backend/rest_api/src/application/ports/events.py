@@ -14,7 +14,10 @@ class EventPublisher(Protocol):
         ...
 
     async def publish_stats_updated(
-        self, user_id: uuid.UUID, messages_count: int, wallets_count: int
+        self,
+        user_id: uuid.UUID,
+        messages_count: int | None = None,
+        wallets_count: int | None = None,
     ) -> None:
         """Publish an event to notify the user that their stats have changed."""
         ...

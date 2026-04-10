@@ -43,9 +43,8 @@ async def process_chat_message(
         await stats_interactor(user_id=user_id)
 
         m_count = await stats_gateway.get_total_messages(user_id)
-        w_count = await stats_gateway.get_wallets_count(user_id)
 
-        await event_publisher.publish_stats_updated(user_id, m_count, w_count)
+        await event_publisher.publish_stats_updated(user_id, messages_count=m_count)
 
         broadcast_payload = {
             "id": str(message.id),
