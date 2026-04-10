@@ -1,5 +1,7 @@
 """rest_api/src/application/interactors/transaction.py."""
 
+import asyncio
+import datetime
 import logging
 import uuid
 from decimal import Decimal
@@ -7,6 +9,7 @@ from typing import Any
 
 from src.application.dtos.request import CreatePendingTransactionRequest
 from src.application.dtos.response import TransactionResponse
+from src.application.ports.events import EventPublisher
 from src.application.ports.gateways.transaction import TransactionGateway
 from src.application.ports.gateways.uow import UnitOfWork
 from src.application.ports.gateways.wallet import WalletGateway
@@ -95,6 +98,77 @@ class CreatePendingTransactionInteractor:
         )
 
 
+class ProcessTransactionCallbackInteractor:
+    """Use case for handling background transaction status updates from the worker."""
+
+    def __init__(
+        self,
+        transaction_gateway: TransactionGateway,
+        wallet_gateway: WalletGateway,
+        uow: UnitOfWork,
+        worker_client: EthereumWorkerClient,
+        event_publisher: EventPublisher,
+    ) -> None:
+        """Initialize the callback interactor with required dependencies."""
+        self.tx_gateway = transaction_gateway
+        self.wallet_gateway = wallet_gateway
+        self.uow = uow
+        self.worker_client = worker_client
+        self.event_publisher = event_publisher
+
+    async def __call__(
+        self,
+        tx_id: uuid.UUID,
+        status: str,
+        tx_hash: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Process the status update from the worker and update local state."""
+        async with self.uow:
+            tx = await self.tx_gateway.get_transaction_by_id(tx_id)
+            if not tx:
+                return
+
+            tx.status = status
+            if tx_hash:
+                tx.tx_hash = tx_hash
+
+            await self.tx_gateway.update_transaction(tx)
+
+            wallet = await self.wallet_gateway.get_wallet_by_id(tx.wallet_id)
+            if wallet:
+                await self.event_publisher.publish_tx_status_updated(
+                    user_id=str(wallet.user_id),
+                    wallet_id=str(tx.wallet_id),
+                    tx_hash=tx.tx_hash,
+                    status=status,
+                    value=str(tx.value),
+                    error=error,
+                )
+
+        if tx and wallet and status in ["success", "failed"]:
+            await asyncio.sleep(3)
+            try:
+                live_balance_str = await self.worker_client.get_balance(wallet.address)
+                async with self.uow:
+                    fresh_wallet = await self.wallet_gateway.get_wallet_by_id(
+                        tx.wallet_id
+                    )
+                    fresh_wallet.balance = Decimal(str(live_balance_str))
+                    fresh_wallet.balance_updated_at = datetime.datetime.now(
+                        datetime.UTC
+                    )
+                    await self.wallet_gateway.update_wallet(fresh_wallet)
+
+                await self.event_publisher.publish_balance_updated(
+                    user_id=str(fresh_wallet.user_id),
+                    wallet_id=str(fresh_wallet.id),
+                    balance=live_balance_str,
+                )
+            except Exception:
+                logger.exception("Failed to update balance after tx finish")
+
+
 class GetTransactionsInteractor:
     """Use case for retrieving transaction history.
 
@@ -102,13 +176,14 @@ class GetTransactionsInteractor:
     verifying live status via Web3 to eliminate Etherscan index delays.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         wallet_gateway: WalletGateway,
         transaction_gateway: TransactionGateway,
         etherscan_provider: EtherscanProvider,
         uow: UnitOfWork,
         worker_client: EthereumWorkerClient,
+        process_callback: ProcessTransactionCallbackInteractor,
     ) -> None:
         """Initialize with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -116,6 +191,7 @@ class GetTransactionsInteractor:
         self.etherscan_provider = etherscan_provider
         self.uow = uow
         self.worker_client = worker_client
+        self.process_callback = process_callback
 
     async def __call__(
         self, user_id: uuid.UUID, wallet_id: uuid.UUID
@@ -150,14 +226,13 @@ class GetTransactionsInteractor:
                 live_status = await self.worker_client.check_tx_status(tx.tx_hash)
 
                 if live_status:
-                    new_status_str = live_status.get("status", "FAILED")
-                    tx.status = TransactionStatus(new_status_str)
+                    new_status_str = live_status.get("status", "FAILED").lower()
 
+                    await self.process_callback(tx_id=tx.id, status=new_status_str)
+
+                    tx.status = TransactionStatus(new_status_str)
                     if "tx_fee" in live_status:
                         tx.tx_fee = Decimal(live_status["tx_fee"])
-
-                    async with self.uow:
-                        await self.transaction_gateway.update_transaction(tx)
 
             pending_txs.append(
                 {

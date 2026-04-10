@@ -35,3 +35,25 @@ async def handle_tx_status_update(payload: dict) -> None:
         namespace="/transaction",
     )
     logger.info("WS: Sent tx %s status (%s) to user %s", tx_hash, status, user_id)
+
+
+@router.subscriber("ws.balance_updated")
+async def handle_balance_updated(payload: dict) -> None:
+    """Listen for balance updates and broadcast to WS."""
+    user_id = payload.get("user_id")
+    wallet_id = payload.get("wallet_id")
+    balance = payload.get("balance")
+
+    if not user_id or not wallet_id:
+        return
+
+    await sio.emit(
+        "balance_updated",
+        {
+            "wallet_id": wallet_id,
+            "balance": balance,
+        },
+        room=f"user_{user_id}",
+        namespace="/transaction",
+    )
+    logger.info("WS: Sent balance %s to wallet %s", balance, wallet_id)

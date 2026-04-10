@@ -40,3 +40,38 @@ class EventPublisherImpl(EventPublisher):
 
         logger.info("Publishing stats update for user: %s", user_id)
         await broker.publish(payload, queue="stats.updated")
+
+    async def publish_tx_status_updated(  # noqa: PLR0913
+        self,
+        user_id: str,
+        wallet_id: str,
+        tx_hash: str,
+        status: str,
+        value: str,
+        error: str | None = None,
+    ) -> None:
+        """Publish a transaction status update event to the WebSocket queue."""
+        payload = {
+            "user_id": user_id,
+            "wallet_id": wallet_id,
+            "tx_hash": tx_hash,
+            "status": status,
+            "value": value,
+        }
+        if error:
+            payload["error"] = error
+
+        logger.info("Publishing tx status update to WS: %s", tx_hash)
+        await broker.publish(payload, queue="ws.tx_updated")
+
+    async def publish_balance_updated(
+        self, user_id: str, wallet_id: str, balance: str
+    ) -> None:
+        """Publish a wallet balance update event to the WebSocket queue."""
+        payload = {
+            "user_id": user_id,
+            "wallet_id": wallet_id,
+            "balance": balance,
+        }
+        logger.info("Publishing balance update to WS for wallet: %s", wallet_id)
+        await broker.publish(payload, queue="ws.balance_updated")

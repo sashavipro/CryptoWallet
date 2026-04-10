@@ -18,8 +18,10 @@ from src.application.interactors.wallet import ImportWalletInteractor
 from src.application.ports.providers.faucet import FaucetProvider
 from src.application.ports.providers.nonce_manager import NonceManager
 from src.application.ports.providers.web3 import Web3Provider
+from src.application.ports.publishers import EventPublisher
 from src.application.ports.utils import Encryptor
 from src.infrastructure.cache.redis_nonce_manager import RedisNonceManager
+from src.infrastructure.message_broker.event_publisher import EventPublisherImpl
 from src.infrastructure.providers.faucet import FaucetProviderImpl
 from src.infrastructure.providers.web3 import Web3ProviderImpl
 from src.infrastructure.settings import RabbitMQSettings
@@ -66,16 +68,17 @@ class InfrastructureProvider(Provider):
         """Provide RabbitMQ connection settings."""
         return mq_settings
 
-    web3_provider = provide(Web3ProviderImpl, provides=Web3Provider)
-    faucet_provider = provide(FaucetProviderImpl, provides=FaucetProvider)
-    nonce_manager = provide(RedisNonceManager, provides=NonceManager)
-
     @provide
     async def provide_redis(self, settings: RedisSettings) -> AsyncIterable[Redis]:
         """Provide an asynchronous Redis client with automatic cleanup."""
         client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
         yield client
         await client.aclose()
+
+    web3_provider = provide(Web3ProviderImpl, provides=Web3Provider)
+    faucet_provider = provide(FaucetProviderImpl, provides=FaucetProvider)
+    nonce_manager = provide(RedisNonceManager, provides=NonceManager)
+    event_publisher = provide(EventPublisherImpl, provides=EventPublisher)
 
 
 class InteractorProvider(Provider):

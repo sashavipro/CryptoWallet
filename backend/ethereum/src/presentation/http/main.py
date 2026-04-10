@@ -8,18 +8,17 @@ from dishka.integrations.fastapi import setup_dishka as setup_dishka_fastapi
 from dishka.integrations.faststream import setup_dishka as setup_dishka_faststream
 from fastapi import FastAPI
 from faststream import FastStream
-from faststream.rabbit import RabbitBroker
 
 from src.application.ports.providers.web3 import Web3Provider
 from src.infrastructure.log_config import setup_logging
-from src.infrastructure.settings import mq_settings
+from src.infrastructure.message_broker.broker import broker
 from src.ioc.container import create_container
 from src.presentation.amqp.consumers import router as amqp_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-broker = RabbitBroker(mq_settings.RABBITMQ_URL)
+
 broker.include_router(amqp_router)
 faststream_app = FastStream(broker)
 

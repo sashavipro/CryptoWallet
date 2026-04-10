@@ -1,5 +1,5 @@
 // Глобальные переменные
-let currentWallets = [];
+let currentWallets =[];
 let currentOpenWalletId = null;
 let walletSocket = null;
 
@@ -94,11 +94,21 @@ function initWalletSocket() {
     const token = getCookie('access_token');
     if (!token) return;
 
-    walletSocket = io("/chat", {
+    // Подключаемся к правильному неймспейсу /transaction и жестко фиксируем websocket
+    walletSocket = io("/transaction", {
         auth: { token: token },
-        transports: ['websocket', 'polling']
+        transports: ['websocket']
     });
 
+    walletSocket.on("connect", () => {
+        console.log("Успешно подключились к WS /transaction! ID сессии:", walletSocket.id);
+    });
+
+    walletSocket.on("connect_error", (err) => {
+        console.error("Ошибка WS /transaction:", err.message);
+    });
+
+    // Обработка статуса транзакций (всплывающие окна + перерисовка таблицы модалки)
     walletSocket.on("transaction_status_changed", (data) => {
         console.log("WS: Изменение статуса транзакции", data);
 
@@ -111,13 +121,6 @@ function initWalletSocket() {
 
         if (status === 'success' || status === '1') {
             showGlobalAlert(`Транзакция ${hashDisplay} успешно завершена!`);
-
-            // ИСПРАВЛЕНИЕ: Каскадное обновление баланса
-            // Ждем, пока RPC-ноды обновят свой внутренний стейт после майнинга блока
-            updateBalances(); // Пробуем сразу
-            setTimeout(() => updateBalances(), 3000); // Пробуем через 3 секунды
-            setTimeout(() => updateBalances(), 7000); // Контрольная проверка через 7 секунд
-
         } else if (status === 'failed' || status === '0') {
             const errorReason = data.error ? `: ${data.error}` : '';
             showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой${errorReason}`, true);
@@ -125,36 +128,22 @@ function initWalletSocket() {
             showGlobalAlert(`Транзакция отправлена в сеть. Ожидаем майнинга...`, false, true);
         }
     });
-}
 
-async function updateBalances() {
-    if (!currentWallets || currentWallets.length === 0) return;
-
-    currentWallets.forEach(async (wallet) => {
-        try {
-            const balRes = await fetch(`/api/v1/wallets/${wallet.id}/balance`);
-            if (balRes.ok) {
-                const balData = await balRes.json();
-                const balanceSpan = document.getElementById(`balance-${wallet.id}`);
-
-                if (balanceSpan) {
-                    const currentText = balanceSpan.textContent;
-                    const newText = parseFloat(balData.balance).toFixed(4);
-
-                    if (currentText !== newText && currentText !== 'Загрузка...') {
-                        balanceSpan.style.color = '#27ae60';
-                        balanceSpan.style.fontWeight = 'bold';
-                        setTimeout(() => {
-                            balanceSpan.style.color = '';
-                            balanceSpan.style.fontWeight = 'normal';
-                        }, 2000);
-                    }
-
-                    balanceSpan.textContent = newText;
-                }
+    // Новый слушатель для реактивного обновления баланса без HTTP-спама
+    walletSocket.on("balance_updated", (data) => {
+        console.log("WS: Получен новый баланс!", data);
+        const balanceSpan = document.getElementById(`balance-${data.wallet_id}`);
+        if (balanceSpan) {
+            const newText = parseFloat(data.balance).toFixed(4);
+            if (balanceSpan.textContent !== newText) {
+                balanceSpan.style.color = '#27ae60';
+                balanceSpan.style.fontWeight = 'bold';
+                setTimeout(() => {
+                    balanceSpan.style.color = '';
+                    balanceSpan.style.fontWeight = 'normal';
+                }, 2000);
+                balanceSpan.textContent = newText;
             }
-        } catch (e) {
-            console.error(`Ошибка фонового обновления баланса для ${wallet.id}`, e);
         }
     });
 }
@@ -179,6 +168,9 @@ async function loadWallets() {
             }
 
             currentWallets.forEach(wallet => {
+                // Сразу берем баланс из БД, убираем заглушку "Загрузка..."
+                const balanceFromDB = parseFloat(wallet.balance || 0).toFixed(4);
+
                 const card = document.createElement('div');
                 card.className = 'wallet-card';
                 card.innerHTML = `
@@ -187,7 +179,7 @@ async function loadWallets() {
                         <div class="wallet-info">
                             <div class="wallet-label">Адрес:</div>
                             <a href="https://sepolia.etherscan.io/address/${wallet.address}" target="_blank" class="wallet-address">${wallet.address}</a>
-                            <div class="wallet-balance"><span id="balance-${wallet.id}" style="transition: color 0.3s;">Загрузка...</span> ETH</div>
+                            <div class="wallet-balance"><span id="balance-${wallet.id}" style="transition: color 0.3s;">${balanceFromDB}</span> ETH</div>
                         </div>
                     </div>
                     <div class="wallet-actions">
@@ -198,8 +190,6 @@ async function loadWallets() {
                 `;
                 container.appendChild(card);
             });
-
-            updateBalances();
         }
     } catch (e) {
         container.innerHTML = '<div style="color: red;">Ошибка загрузки кошельков.</div>';
@@ -255,16 +245,13 @@ function fetchAndUpdateTxs(walletId) {
     if (currentOpenWalletId !== walletId) return;
     const tbody = document.getElementById('txTableBody');
 
-    // 1. Проверяем, что вебсокет жив
     if (!walletSocket || !walletSocket.connected) {
         tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
         return;
     }
 
-    // 2. Запрашиваем историю через WebSocket (вместо HTTP fetch)
+    // Запрашиваем историю через вебсокет
     walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
-
-        // Обработка ошибки от бэкенда
         if (!response || response.status === "error") {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Ошибка загрузки истории: ${response?.message || 'Неизвестная ошибка'}</td></tr>`;
             return;
@@ -272,13 +259,11 @@ function fetchAndUpdateTxs(walletId) {
 
         const txs = response.data;
 
-        // Если транзакций нет
         if (txs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Транзакций не найдено.</td></tr>';
             return;
         }
 
-        // 3. Рендерим HTML
         let newHtml = '';
         txs.forEach((tx) => {
             const txHash = tx.hash || tx.tx_hash || tx.id;
@@ -306,7 +291,6 @@ function fetchAndUpdateTxs(walletId) {
             const toAddr = tx.to || tx.to_address || '---';
             const txFee = tx.tx_fee ? parseFloat(tx.tx_fee).toFixed(6) : '0.0000';
 
-            // Ваша отличная логика ссылок на Etherscan
             let hashDisplay;
             if (txHash.startsWith('0x')) {
                 hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-hash" title="Посмотреть в Etherscan">${txHash.substring(0, 15)}...</a>`;

@@ -34,6 +34,7 @@ from src.application.interactors import RegisterUserInteractor
 from src.application.interactors import RequestTestnetEthInteractor
 from src.application.interactors import UpdateUserInteractor
 from src.application.interactors.chat import GetChatHistoryInteractor
+from src.application.interactors.transaction import ProcessTransactionCallbackInteractor
 from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import ChatMessageGateway
@@ -314,6 +315,7 @@ class InteractorProvider(Provider):
     # Transactions
     create_transaction_interactor = provide(CreatePendingTransactionInteractor)
     get_transactions_interactor = provide(GetTransactionsInteractor)
+    process_tx_callback_interactor = provide(ProcessTransactionCallbackInteractor)
 
     # Faucet
     request_faucet_interactor = provide(RequestTestnetEthInteractor)
