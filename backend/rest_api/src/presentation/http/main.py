@@ -42,6 +42,23 @@ STATIC_DIR = PROJECT_ROOT / "frontend" / "static"
 MAX_RETRIES = 5
 
 
+async def background_balance_sync(container) -> None:
+    """Trigger the background balance sync every 30 seconds."""
+    from src.application.interactors.wallet import SyncAllWalletsBalanceInteractor
+
+    while True:
+        try:
+            async with container() as request_container:
+                sync_interactor = await request_container.get(
+                    SyncAllWalletsBalanceInteractor
+                )
+                await sync_interactor()
+        except Exception:
+            logger.exception("Background sync error")
+
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage the application lifespan, including background connections."""
@@ -55,8 +72,9 @@ async def lifespan(app: FastAPI):
                 raise
             logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
             await asyncio.sleep(5)
-
+    sync_task = asyncio.create_task(background_balance_sync(app.state.dishka_container))
     yield
+    sync_task.cancel()
     await broker.close()
 
 

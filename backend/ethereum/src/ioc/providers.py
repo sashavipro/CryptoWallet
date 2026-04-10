@@ -10,6 +10,9 @@ from redis.asyncio import Redis
 from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.application.interactors.transaction import SendTransactionInteractor
 from src.application.interactors.transaction_watcher import (
+    BackgroundTransactionWatcherInteractor,
+)
+from src.application.interactors.transaction_watcher import (
     CheckTransactionStatusInteractor,
 )
 from src.application.interactors.wallet import CreateWalletInteractor
@@ -92,3 +95,6 @@ class InteractorProvider(Provider):
     send_transaction_interactor = provide(SendTransactionInteractor)
     request_testnet_eth_interactor = provide(RequestTestnetEthInteractor)
     check_transaction_status_interactor = provide(CheckTransactionStatusInteractor)
+    background_transaction_watcher_interactor = provide(
+        BackgroundTransactionWatcherInteractor
+    )

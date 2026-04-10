@@ -118,18 +118,23 @@ class ProcessTransactionCallbackInteractor:
 
     async def __call__(
         self,
-        tx_id: uuid.UUID,
         status: str,
+        tx_id: uuid.UUID | None = None,
         tx_hash: str | None = None,
         error: str | None = None,
     ) -> None:
         """Process the status update from the worker and update local state."""
         async with self.uow:
-            tx = await self.tx_gateway.get_transaction_by_id(tx_id)
+            tx = None
+            if tx_id:
+                tx = await self.tx_gateway.get_transaction_by_id(tx_id)
+            elif tx_hash:
+                tx = await self.tx_gateway.get_transaction_by_hash(tx_hash)
+
             if not tx:
                 return
 
-            tx.status = status
+            tx.status = TransactionStatus(status.upper())
             if tx_hash:
                 tx.tx_hash = tx_hash
 
@@ -137,34 +142,40 @@ class ProcessTransactionCallbackInteractor:
 
             wallet = await self.wallet_gateway.get_wallet_by_id(tx.wallet_id)
             if wallet:
-                await self.event_publisher.publish_tx_status_updated(
-                    user_id=str(wallet.user_id),
-                    wallet_id=str(tx.wallet_id),
-                    tx_hash=tx.tx_hash,
-                    status=status,
-                    value=str(tx.value),
-                    error=error,
-                )
+                wallet_address = wallet.address
+                wallet_id_to_sync = tx.wallet_id
+                tx_to_publish = {
+                    "user_id": str(wallet.user_id),
+                    "wallet_id": str(tx.wallet_id),
+                    "tx_hash": tx.tx_hash,
+                    "status": status,
+                    "value": str(tx.value),
+                    "error": error,
+                }
 
-        if tx and wallet and status in ["success", "failed"]:
+        if tx_to_publish:
+            await self.event_publisher.publish_tx_status_updated(**tx_to_publish)
+
+        if tx_to_publish and status in ["success", "failed"]:
             await asyncio.sleep(3)
             try:
-                live_balance_str = await self.worker_client.get_balance(wallet.address)
+                live_balance_str = await self.worker_client.get_balance(wallet_address)
                 async with self.uow:
                     fresh_wallet = await self.wallet_gateway.get_wallet_by_id(
-                        tx.wallet_id
+                        wallet_id_to_sync
                     )
-                    fresh_wallet.balance = Decimal(str(live_balance_str))
-                    fresh_wallet.balance_updated_at = datetime.datetime.now(
-                        datetime.UTC
-                    )
-                    await self.wallet_gateway.update_wallet(fresh_wallet)
+                    if fresh_wallet:
+                        fresh_wallet.balance = Decimal(str(live_balance_str))
+                        fresh_wallet.balance_updated_at = datetime.datetime.now(
+                            datetime.UTC
+                        )
+                        await self.wallet_gateway.update_wallet(fresh_wallet)
 
-                await self.event_publisher.publish_balance_updated(
-                    user_id=str(fresh_wallet.user_id),
-                    wallet_id=str(fresh_wallet.id),
-                    balance=live_balance_str,
-                )
+                    await self.event_publisher.publish_balance_updated(
+                        user_id=tx_to_publish["user_id"],
+                        wallet_id=tx_to_publish["wallet_id"],
+                        balance=live_balance_str,
+                    )
             except Exception:
                 logger.exception("Failed to update balance after tx finish")
 
@@ -230,7 +241,7 @@ class GetTransactionsInteractor:
 
                     await self.process_callback(tx_id=tx.id, status=new_status_str)
 
-                    tx.status = TransactionStatus(new_status_str)
+                    tx.status = TransactionStatus(new_status_str.upper())
                     if "tx_fee" in live_status:
                         tx.tx_fee = Decimal(live_status["tx_fee"])
 

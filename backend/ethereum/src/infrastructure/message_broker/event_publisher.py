@@ -22,3 +22,17 @@ class EventPublisherImpl(EventPublisher):
         payload = {"tx_id": tx_id, "status": "FAILED", "error": error}
         logger.warning("Publishing tx failed initiation: %s", error)
         await broker.publish(payload, queue="eth.tx_failed_initiation")
+
+    async def publish_tx_processed(
+        self, tx_id: str | None, tx_hash: str, status: str, fee: str
+    ) -> None:
+        """Publish an event indicating a transaction was processed on-chain."""
+        payload = {"tx_id": tx_id, "tx_hash": tx_hash, "fee": fee}
+
+        if status.lower() == "success":
+            logger.info("Publishing tx success: %s", tx_hash)
+            await broker.publish(payload, queue="eth.tx_success")
+        else:
+            payload["error"] = "Transaction reverted on chain"
+            logger.warning("Publishing tx failed: %s", tx_hash)
+            await broker.publish(payload, queue="eth.tx_failed")

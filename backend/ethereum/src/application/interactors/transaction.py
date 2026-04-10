@@ -35,12 +35,8 @@ class SendTransactionInteractor:
         from_address: str,
         to_address: str,
         value_eth: str,
-    ) -> None:
-        """Execute the transaction sending process.
-
-        Decrypts the private key, retrieves the next nonce, signs and sends the
-        transaction to the network, and publishes an event based on the result.
-        """
+    ) -> str | None:
+        """Execute the transaction sending process."""
         try:
             raw_pk = self.encryptor.decrypt(private_key_encrypted)
             nonce = await self.nonce_manager.get_and_increment_nonce(from_address)
@@ -68,3 +64,6 @@ class SendTransactionInteractor:
         except Exception as e:
             logger.exception("Failed to send tx %s", tx_id)
             await self.event_publisher.publish_tx_failed_initiation(tx_id, str(e))
+            return None
+        else:
+            return tx_hash

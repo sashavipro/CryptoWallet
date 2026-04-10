@@ -44,3 +44,7 @@ class WalletGateway(Protocol):
     async def delete_wallet(self, wallet_id: uuid.UUID) -> None:
         """Delete a wallet from the database by its ID."""
         ...
+
+    async def get_all_wallets(self) -> list[Wallet]:
+        """Retrieve all wallets from the database."""
+        ...

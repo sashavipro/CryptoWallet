@@ -35,6 +35,7 @@ from src.application.interactors import RequestTestnetEthInteractor
 from src.application.interactors import UpdateUserInteractor
 from src.application.interactors.chat import GetChatHistoryInteractor
 from src.application.interactors.transaction import ProcessTransactionCallbackInteractor
+from src.application.interactors.wallet import SyncAllWalletsBalanceInteractor
 from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import ChatMessageGateway
@@ -311,6 +312,7 @@ class InteractorProvider(Provider):
     get_balance_interactor = provide(GetBalanceInteractor)
     delete_wallet_interactor = provide(DeleteWalletInteractor)
     import_wallet_interactor = provide(ImportWalletInteractor)
+    sync_all_wallets_balance_interactor = provide(SyncAllWalletsBalanceInteractor)
 
     # Transactions
     create_transaction_interactor = provide(CreatePendingTransactionInteractor)

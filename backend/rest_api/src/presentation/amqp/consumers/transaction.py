@@ -43,7 +43,9 @@ async def handle_tx_success(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
 ) -> None:
     """Process the event triggered when a transaction is successfully mined."""
-    await interactor(tx_id=uuid.UUID(payload["tx_id"]), status="success")
+    tx_id_raw = payload.get("tx_id")
+    tx_id = uuid.UUID(tx_id_raw) if tx_id_raw else None
+    await interactor(tx_id=tx_id, tx_hash=payload.get("tx_hash"), status="success")
 
 
 @router.subscriber("eth.tx_failed")
@@ -52,8 +54,11 @@ async def handle_tx_failed(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
 ) -> None:
     """Process the event triggered when a transaction execution fails on-chain."""
+    tx_id_raw = payload.get("tx_id")
+    tx_id = uuid.UUID(tx_id_raw) if tx_id_raw else None
     await interactor(
-        tx_id=uuid.UUID(payload["tx_id"]),
+        tx_id=tx_id,
+        tx_hash=payload.get("tx_hash"),
         status="failed",
-        error=payload.get("error", "Execution failed on chain"),
+        error=payload.get("error", "Unknown error"),
     )

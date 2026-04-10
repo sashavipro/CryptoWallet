@@ -105,3 +105,15 @@ class WalletGateway:
         db_wallet = result.scalar_one_or_none()
 
         return map_wallet_to_domain(db_wallet) if db_wallet else None
+
+    async def get_all_wallets(self) -> list[DomainWallet]:
+        """Retrieve all wallets from the database for background sync."""
+        from sqlalchemy import select
+
+        from src.infrastructure.persistence.database.models.wallet import (
+            Wallet as DBWallet,
+        )
+
+        stmt = select(DBWallet)
+        result = await self.session.execute(stmt)
+        return [map_wallet_to_domain(w) for w in result.scalars().all()]

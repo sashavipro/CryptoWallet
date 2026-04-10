@@ -1,7 +1,10 @@
 """rest_api/src/application/interactors/wallet.py."""
 
+import asyncio
 import logging
 import uuid
+from datetime import UTC
+from datetime import datetime
 from decimal import Decimal
 
 from src.application.dtos.request.wallet import CreateWalletRequest
@@ -264,3 +267,61 @@ class DeleteWalletInteractor:
 
         w_count = await self.stats_gateway.get_wallets_count(user_id)
         await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
+
+
+class SyncAllWalletsBalanceInteractor:
+    """Background worker use case to sync balances for all system wallets."""
+
+    def __init__(
+        self,
+        wallet_gateway: WalletGateway,
+        worker_client: EthereumWorkerClient,
+        event_publisher: EventPublisher,
+        uow: UnitOfWork,
+    ) -> None:
+        """Initialize the interactor with required gateways and publishers."""
+        self.wallet_gateway = wallet_gateway
+        self.worker_client = worker_client
+        self.event_publisher = event_publisher
+        self.uow = uow
+        self.logger = logging.getLogger(__name__)
+
+    async def __call__(self) -> None:
+        """Fetch live balances and update DB/WS if changed."""
+        async with self.uow:
+            wallets = await self.wallet_gateway.get_all_wallets()
+
+        if not wallets:
+            return
+
+        for wallet in wallets:
+            try:
+                live_balance_str = await self.worker_client.get_balance(wallet.address)
+                live_balance = Decimal(str(live_balance_str))
+
+                if wallet.balance != live_balance:
+                    self.logger.info(
+                        "Balance changed for %s: %s -> %s",
+                        wallet.address,
+                        wallet.balance,
+                        live_balance,
+                    )
+
+                    async with self.uow:
+                        fresh_wallet = await self.wallet_gateway.get_wallet_by_id(
+                            wallet.id
+                        )
+                        fresh_wallet.balance = live_balance
+                        fresh_wallet.balance_updated_at = datetime.now(UTC)
+                        await self.wallet_gateway.update_wallet(fresh_wallet)
+
+                    await self.event_publisher.publish_balance_updated(
+                        user_id=str(wallet.user_id),
+                        wallet_id=str(wallet.id),
+                        balance=str(live_balance),
+                    )
+
+            except Exception:
+                self.logger.exception("Failed to sync balance for %s", wallet.address)
+
+            await asyncio.sleep(0.5)

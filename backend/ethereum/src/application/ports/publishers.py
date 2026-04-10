@@ -13,3 +13,9 @@ class EventPublisher(Protocol):
     async def publish_tx_failed_initiation(self, tx_id: str, error: str) -> None:
         """Publish event when tx failed to be sent."""
         ...
+
+    async def publish_tx_processed(
+        self, tx_id: str | None, tx_hash: str, status: str, fee: str
+    ) -> None:
+        """Publish event when tx is mined and processed."""
+        ...
