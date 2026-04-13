@@ -283,6 +283,91 @@
         }
     }
 
+    /* --- НОВЫЕ СТИЛИ ДЛЯ ПРИКРЕПЛЕНИЯ ИЗОБРАЖЕНИЙ --- */
+    .chat-input-wrapper {
+        padding: 15px 25px;
+        background: #ffffff;
+        border-top: 1px solid #e0e0e0;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column; /* Изменено для превью */
+    }
+
+    /* Контейнер для превью картинки над строкой ввода */
+    .image-preview-container {
+        display: none; /* Скрыто по умолчанию */
+        position: relative;
+        width: 60px;
+        height: 60px;
+        margin-bottom: 10px;
+        margin-left: 15px; /* Выравниваем с input */
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    .image-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: 8px;
+    }
+
+    .remove-image-btn {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    .remove-image-btn:hover {
+        background: #c0392b;
+    }
+
+    .chat-input-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        background: #f8f9fa;
+        padding: 8px 15px;
+        border-radius: 30px;
+        border: 1px solid #eeeeee;
+    }
+
+    .btn-attach {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #777777;
+        display: flex;
+        align-items: center;
+        padding: 5px;
+        border-radius: 50%;
+        transition: background 0.2s;
+    }
+
+    .btn-attach:hover {
+        background: #e9ecef;
+        color: #333333;
+    }
+
+    .btn-attach svg { width: 20px; height: 20px; fill: currentColor; }
+
+    /* Скрываем реальный input file */
+    .hidden-file-input {
+        display: none;
+    }
+
     /* Красивый скроллбар */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -302,7 +387,18 @@
         <div class="chat-messages" id="chatMessages"></div>
 
         <div class="chat-input-wrapper">
+            <div class="image-preview-container" id="imagePreviewContainer">
+                <img src="" alt="Preview" class="image-preview" id="imagePreview">
+                <button class="remove-image-btn" id="removeImageBtn">✕</button>
+            </div>
+
             <div class="chat-input-container">
+                <button class="btn-attach" id="btnAttach" title="Прикрепить изображение">
+                    <svg viewBox="0 0 24 24"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-3.04-2.46-5.5-5.5-5.5S4 1.96 4 5v12.5c0 3.87 3.13 7 7 7s7-3.13 7-7V6h-1.5z"/></svg>
+                </button>
+
+                <input type="file" id="chatImageInput" class="hidden-file-input" accept="image/png, image/jpeg, image/jpg, image/webp">
+
                 <input type="text" class="chat-input" id="chatInput" placeholder="Введите сообщение..." autocomplete="off">
                 <button class="btn-send" id="btnSendMsg">
                     <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
@@ -311,13 +407,7 @@
         </div>
     </div>
 
-    <div class="chat-sidebar">
-        <div class="online-header">
-            В сети <span class="online-count-badge" id="onlineCount">0</span>
-        </div>
-        <ul class="online-list" id="onlineUsersList"></ul>
     </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}

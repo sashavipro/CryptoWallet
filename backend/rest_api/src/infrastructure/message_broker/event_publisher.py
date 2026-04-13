@@ -75,3 +75,30 @@ class EventPublisherImpl(EventPublisher):
         }
         logger.info("Publishing balance update to WS for wallet: %s", wallet_id)
         await broker.publish(payload, queue="ws.balance_updated")
+
+    async def publish_ibay_product_created(
+        self, product_id: str, title: str, price: str, photo_url: str | None
+    ) -> None:
+        """Publish an event when a new iBay product is created."""
+        payload = {
+            "product_id": product_id,
+            "title": title,
+            "price_eth": price,
+            "photo_url": photo_url,
+        }
+        logger.info("Publishing event: ibay.product_created for %s", product_id)
+        await broker.publish(payload, queue="ibay.product_created")
+
+    async def publish_ibay_order_created(
+        self, order_id: str, product_id: str, buyer_id: str, status: str, price: str
+    ) -> None:
+        """Publish an event when an order is created."""
+        payload = {
+            "order_id": order_id,
+            "product_id": product_id,
+            "buyer_id": buyer_id,
+            "status": status,
+            "price_eth": price,
+        }
+        logger.info("Publishing event: ibay.order_created for %s", order_id)
+        await broker.publish(payload, queue="ibay.order_created")

@@ -3,6 +3,8 @@
 from .asset import AssetGateway
 from .chat import ChatMessageGateway
 from .chat import ChatUserGateway
+from .ibay import OrderGateway
+from .ibay import ProductGateway
 from .permission import PermissionGateway
 from .stats import StatsGateway
 from .transaction import TransactionGateway
@@ -14,7 +16,9 @@ __all__ = (
     "AssetGateway",
     "ChatMessageGateway",
     "ChatUserGateway",
+    "OrderGateway",
     "PermissionGateway",
+    "ProductGateway",
     "StatsGateway",
     "TransactionGateway",
     "UnitOfWork",

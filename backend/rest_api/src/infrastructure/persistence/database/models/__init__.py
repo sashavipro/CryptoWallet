@@ -4,6 +4,8 @@ from .asset import Asset
 from .base import Base
 from .chat_mongo import ChatMessageDocument
 from .chat_mongo import ChatUserDocument
+from .ibay import Order
+from .ibay import Product
 from .permission import UserPermission
 from .transaction import Transaction
 from .user import User
@@ -15,6 +17,8 @@ __all__ = (
     "Base",
     "ChatMessageDocument",
     "ChatUserDocument",
+    "Order",
+    "Product",
     "Transaction",
     "User",
     "UserPermission",

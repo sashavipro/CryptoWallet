@@ -95,3 +95,11 @@ class FaucetRateLimitException(DomainException):
     def __init__(self, message: str) -> None:
         """Initialize the exception with a custom message."""
         super().__init__(message)
+
+
+class OrderStateMachineError(ValueError):
+    """Exception raised for invalid order state transitions."""
+
+
+class ProductNotFoundException(DomainException):
+    """iBay product not found."""

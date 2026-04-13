@@ -39,3 +39,15 @@ class EventPublisher(Protocol):
     ) -> None:
         """Publish wallet balance update for WebSocket."""
         ...
+
+    async def publish_ibay_product_created(
+        self, product_id: str, title: str, price: str, photo_url: str | None
+    ) -> None:
+        """Publish an event when a new iBay product is created."""
+        ...
+
+    async def publish_ibay_order_created(
+        self, order_id: str, product_id: str, buyer_id: str, status: str, price: str
+    ) -> None:
+        """Publish an event when an order is created."""
+        ...

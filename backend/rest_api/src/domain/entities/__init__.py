@@ -4,6 +4,8 @@ from .asset import Asset
 from .base import BaseEntity
 from .chat import ChatMessage
 from .chat import ChatUser
+from .ibay import Order
+from .ibay import Product
 from .permissions import UserPermission
 from .transaction import Transaction
 from .user import User
@@ -14,6 +16,8 @@ __all__ = (
     "BaseEntity",
     "ChatMessage",
     "ChatUser",
+    "Order",
+    "Product",
     "Transaction",
     "User",
     "UserPermission",

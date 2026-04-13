@@ -195,20 +195,36 @@ function setupChatUIEvents() {
     const sendBtn = document.getElementById('btnSendMsg');
     const input = document.getElementById('chatInput');
     const fileInput = document.getElementById('chatImageInput'); // Скрытый input[type=file]
+    const attachBtn = document.getElementById('btnAttach'); // Кнопка со скрепкой
     const removeImgBtn = document.getElementById('removeImageBtn');
 
+    // При клике на Enter или кнопку "Отправить"
     sendBtn.addEventListener('click', sendMessage);
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
 
-    // Когда пользователь выбрал картинку
+    // При клике на скрепку - имитируем клик по скрытому input
+    if (attachBtn && fileInput) {
+        attachBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+    }
+
+    // Когда пользователь выбрал картинку в диалоговом окне
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 selectedImageFile = e.target.files[0];
 
-                // Читаем файл локально для превью
+                // Проверяем тип файла (на всякий случай)
+                if (!selectedImageFile.type.startsWith('image/')) {
+                    alert("Пожалуйста, выберите изображение (JPG, PNG, WEBP).");
+                    clearImageSelection();
+                    return;
+                }
+
+                // Читаем файл локально для превью через FileReader
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     document.getElementById('imagePreview').src = event.target.result;
@@ -234,8 +250,12 @@ function clearImageSelection() {
     selectedImageFile = null;
     const fileInput = document.getElementById('chatImageInput');
     if (fileInput) fileInput.value = '';
-    document.getElementById('imagePreviewContainer').style.display = 'none';
-    document.getElementById('imagePreview').src = '';
+
+    const previewContainer = document.getElementById('imagePreviewContainer');
+    if (previewContainer) previewContainer.style.display = 'none';
+
+    const previewImg = document.getElementById('imagePreview');
+    if (previewImg) previewImg.src = '';
 }
 
 // --- ИЗМЕНЕНИЕ: ОТПРАВКА СООБЩЕНИЯ С КАРТИНКОЙ ---
@@ -243,49 +263,60 @@ async function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
 
-    // Блокируем отправку, если пусто
+    // Блокируем отправку, если пусто и нет картинки
     if (!text && !selectedImageFile) return;
 
     let imageKey = null;
 
-    // ЗАГОТОВКА ДЛЯ S3:
+    // ЗАГОТОВКА ДЛЯ S3 (пока не подключен DigitalOcean Spaces):
     if (selectedImageFile) {
-        /* // 1. Получаем presigned URL от нашего бэкенда
-        const presignedRes = await fetch(`/api/v1/profile/generate-upload-url?filename=${selectedImageFile.name}&file_type=chat`, {
-            headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
-        });
-        const uploadData = await presignedRes.json();
+        /* // --- ЭТОТ БЛОК РАСКОММЕНТИРУЕТЕ, КОГДА НАСТРОИТЕ DO SPACES ---
 
-        // 2. Отправляем сам файл напрямую в DigitalOcean Spaces (S3)
-        await fetch(uploadData.upload_url, {
-            method: 'PUT',
-            body: selectedImageFile,
-            headers: { 'Content-Type': selectedImageFile.type }
-        });
+        try {
+            // 1. Получаем presigned URL от нашего бэкенда
+            const presignedRes = await fetch(`/api/v1/profile/generate-upload-url?filename=${encodeURIComponent(selectedImageFile.name)}&file_type=chat`, {
+                headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
+            });
 
-        // 3. Сохраняем ключ, чтобы передать его в сокет
-        imageKey = uploadData.file_key;
+            if (!presignedRes.ok) throw new Error("Failed to get presigned URL");
+            const uploadData = await presignedRes.json();
+
+            // 2. Отправляем сам файл напрямую в DigitalOcean Spaces (S3)
+            const uploadRes = await fetch(uploadData.upload_url, {
+                method: 'PUT',
+                body: selectedImageFile,
+                headers: { 'Content-Type': selectedImageFile.type }
+            });
+
+            if (!uploadRes.ok) throw new Error("Failed to upload to S3");
+
+            // 3. Сохраняем ключ, чтобы передать его в сокет
+            imageKey = uploadData.file_key;
+        } catch (error) {
+            console.error("Ошибка загрузки изображения:", error);
+            alert("Не удалось загрузить изображение. Попробуйте позже.");
+            return; // Прерываем отправку сообщения, если картинка не загрузилась
+        }
         */
 
         // ВРЕМЕННАЯ ЗАГЛУШКА ПОКА S3 НЕ РАБОТАЕТ:
-        console.warn("S3 upload not yet fully integrated. Sending text only or fake key.");
-        // imageKey = "fake_image_key.png"; // Можно раскомментить для теста верстки
+        console.warn("S3 upload is currently disabled. Sending fake image key.");
+        // imageKey = "fake_chat_image.png"; // Раскомментируйте, чтобы протестировать логику сокетов
     }
 
     // Отправляем всё в сокет
     if (chatSocket && chatSocket.connected) {
-        // Добавляем коллбэк функцию третьим аргументом, чтобы получить ответ
         chatSocket.emit("send_message", {
             room_id: "chat_global",
             text: text,
-            image_key: imageKey,
+            image_key: imageKey, // Передаем ключ (или null, если нет картинки)
             temp_id: crypto.randomUUID()
         }, (response) => {
-            // Если бэкенд отбил сообщение (например, не прошло 60 секунд)
+            // Callback от сервера: проверяем, не сработал ли rate limit
             if (response && response.status === "error") {
-                alert(response.message); // Выскочит красивое уведомление!
+                alert(response.message || "Ошибка при отправке сообщения");
             } else {
-                // Очищаем инпуты только если сообщение ушло успешно
+                // Очищаем инпут и превью только если сообщение ушло успешно
                 input.value = '';
                 clearImageSelection();
             }
