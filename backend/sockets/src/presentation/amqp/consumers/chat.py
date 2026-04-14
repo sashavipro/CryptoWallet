@@ -2,15 +2,22 @@
 
 import logging
 
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
+stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC)
 
 
-@router.subscriber("chat.broadcast_message")
+@router.subscriber(
+    RabbitQueue("sockets_stats_queue", routing_key="stats.updated"),
+    exchange=stats_exchange,
+)
 async def handle_broadcast_message(payload: dict) -> None:
     """Retrieve a saved message from the broker and instantly broadcast it."""
     room_id = payload.get("room_id")

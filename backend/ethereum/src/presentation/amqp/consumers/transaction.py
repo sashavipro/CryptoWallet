@@ -5,6 +5,7 @@ import logging
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors import CheckTransactionStatusInteractor
@@ -19,7 +20,7 @@ router = RabbitRouter()
 background_tasks = set()
 
 
-@router.subscriber("eth.send_transaction")
+@router.subscriber(RabbitQueue("ethereum_tx_queue", routing_key="eth.send_transaction"))
 @inject
 async def handle_send_transaction(
     payload: dict,
@@ -43,7 +44,7 @@ async def handle_send_transaction(
         task.add_done_callback(background_tasks.discard)
 
 
-@router.subscriber("eth.check_tx_status")
+@router.subscriber(RabbitQueue("ethereum_tx_queue", routing_key="eth.check_tx_status"))
 @inject
 async def handle_check_tx_status(
     payload: dict, interactor: FromDishka[CheckTransactionStatusInteractor]

@@ -2,11 +2,14 @@
 
 import logging
 
+from faststream.rabbit import ExchangeType
 from faststream.rabbit import RabbitBroker
+from faststream.rabbit import RabbitExchange
 
 from src.application.ports.events import EventPublisher
 
 logger = logging.getLogger(__name__)
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC)
 
 
 class RabbitMQEventPublisher(EventPublisher):
@@ -27,4 +30,6 @@ class RabbitMQEventPublisher(EventPublisher):
             "buyer_id": buyer_id,
         }
         logger.info("Publishing ibay.order_updated event: %s", payload)
-        await self.broker.publish(payload, queue="ibay.order_updated")
+        await self.broker.publish(
+            payload, exchange=ibay_exchange, routing_key="ibay.order_updated"
+        )

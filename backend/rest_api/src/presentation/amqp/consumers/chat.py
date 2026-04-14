@@ -4,6 +4,9 @@ import logging
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors import IncrementTotalMessagesInteractor
@@ -17,8 +20,13 @@ logger = logging.getLogger(__name__)
 
 router = RabbitRouter()
 
+chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC)
 
-@router.subscriber("chat.process_message")
+
+@router.subscriber(
+    RabbitQueue("rest_api_chat_queue", routing_key="chat.process_message"),
+    exchange=chat_exchange,
+)
 @inject
 async def process_chat_message(
     payload: dict,

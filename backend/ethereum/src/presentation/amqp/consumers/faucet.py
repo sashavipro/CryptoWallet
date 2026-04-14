@@ -4,6 +4,7 @@ import asyncio
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors.faucet import RequestTestnetEthInteractor
@@ -16,7 +17,9 @@ router = RabbitRouter()
 background_tasks = set()
 
 
-@router.subscriber("eth.request_faucet")
+@router.subscriber(
+    RabbitQueue("ethereum_faucet_queue", routing_key="eth.request_faucet")
+)
 @inject
 async def handle_request_faucet(
     payload: dict,

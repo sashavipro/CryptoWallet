@@ -4,6 +4,9 @@ import logging
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.ports.gateways import ChatUserGateway
@@ -15,8 +18,13 @@ logger = logging.getLogger(__name__)
 
 router = RabbitRouter()
 
+user_exchange = RabbitExchange("user_events", type=ExchangeType.TOPIC)
 
-@router.subscriber("auth.user_registered")
+
+@router.subscriber(
+    RabbitQueue("rest_api_auth_queue", routing_key="auth.user_registered"),
+    exchange=user_exchange,
+)
 @inject
 async def handle_user_registered(
     payload: dict,
@@ -43,6 +51,6 @@ async def handle_user_registered(
 
     try:
         await mail_provider.send_welcome_email(to_email=email, username=username)
-        logger.info("Welcome email sent asynchronously to user ID: %s", user_id)
+        logger.info("Welcome email sent asynchronously to user ID %s", user_id)
     except Exception:
-        logger.exception("Background task failed to send welcome email to %s", email)
+        logger.exception("Error sending welcome email to %s", email)

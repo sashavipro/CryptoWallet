@@ -2,10 +2,14 @@
 
 import logging
 
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+
 from src.application.ports.publishers import EventPublisher
 from src.infrastructure.message_broker.broker import broker
 
 logger = logging.getLogger(__name__)
+chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC)
 
 
 class EventPublisherImpl(EventPublisher):
@@ -27,5 +31,9 @@ class EventPublisherImpl(EventPublisher):
             "image_key": image_key,
             "temp_id": temp_id,
         }
+
         logger.info("Publishing raw chat message from WS to broker. User: %s", user_id)
-        await broker.publish(payload, queue="chat.process_message")
+
+        await broker.publish(
+            payload, exchange=chat_exchange, routing_key="chat.process_message"
+        )

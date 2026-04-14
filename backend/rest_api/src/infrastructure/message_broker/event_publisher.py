@@ -3,10 +3,17 @@
 import logging
 import uuid
 
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+
 from src.application.ports.events import EventPublisher
 from src.infrastructure.message_broker.broker import broker
 
 logger = logging.getLogger(__name__)
+user_exchange = RabbitExchange("user_events", type=ExchangeType.TOPIC)
+stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC)
+ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC)
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC)
 
 
 class EventPublisherImpl(EventPublisher):
@@ -22,7 +29,9 @@ class EventPublisherImpl(EventPublisher):
             "username": username,
         }
         logger.info("Publishing event: user_events.registered for %s", email)
-        await broker.publish(payload, queue="user_events.registered")
+        await broker.publish(
+            payload, exchange=user_exchange, routing_key="auth.user_registered"
+        )
 
     async def publish_stats_updated(
         self,
@@ -39,7 +48,9 @@ class EventPublisherImpl(EventPublisher):
             payload["wallets_count"] = wallets_count
 
         logger.info("Publishing stats update for user: %s", user_id)
-        await broker.publish(payload, queue="stats.updated")
+        await broker.publish(
+            payload, exchange=stats_exchange, routing_key="stats.updated"
+        )
 
     async def publish_tx_status_updated(  # noqa: PLR0913
         self,
@@ -62,7 +73,7 @@ class EventPublisherImpl(EventPublisher):
             payload["error"] = error
 
         logger.info("Publishing tx status update to WS: %s", tx_hash)
-        await broker.publish(payload, queue="ws.tx_updated")
+        await broker.publish(payload, exchange=ws_exchange, routing_key="ws.tx_updated")
 
     async def publish_balance_updated(
         self, user_id: str, wallet_id: str, balance: str
@@ -74,7 +85,9 @@ class EventPublisherImpl(EventPublisher):
             "balance": balance,
         }
         logger.info("Publishing balance update to WS for wallet: %s", wallet_id)
-        await broker.publish(payload, queue="ws.balance_updated")
+        await broker.publish(
+            payload, exchange=ws_exchange, routing_key="ws.balance_updated"
+        )
 
     async def publish_ibay_product_created(
         self, product_id: str, title: str, price: str, photo_url: str | None
@@ -87,7 +100,9 @@ class EventPublisherImpl(EventPublisher):
             "photo_url": photo_url,
         }
         logger.info("Publishing event: ibay.product_created for %s", product_id)
-        await broker.publish(payload, queue="ibay.product_created")
+        await broker.publish(
+            payload, exchange=ibay_exchange, routing_key="ibay.product_created"
+        )
 
     async def publish_ibay_order_created(
         self, order_id: str, product_id: str, buyer_id: str, status: str, price: str
@@ -101,4 +116,6 @@ class EventPublisherImpl(EventPublisher):
             "price_eth": price,
         }
         logger.info("Publishing event: ibay.order_created for %s", order_id)
-        await broker.publish(payload, queue="ibay.order_created")
+        await broker.publish(
+            payload, exchange=ibay_exchange, routing_key="ibay.order_created"
+        )

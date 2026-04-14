@@ -2,15 +2,22 @@
 
 import logging
 
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC)
 
 
-@router.subscriber("ibay.product_created")
+@router.subscriber(
+    RabbitQueue("sockets_ibay_queue", routing_key="ibay.product_created"),
+    exchange=ibay_exchange,
+)
 async def handle_product_created(payload: dict) -> None:
     """Broadcast new product events to all subscribed customers."""
     product_id = payload.get("product_id")
@@ -26,7 +33,10 @@ async def handle_product_created(payload: dict) -> None:
     logger.info("WS: Broadcasted new product %s to all users", product_id)
 
 
-@router.subscriber("ibay.order_created")
+@router.subscriber(
+    RabbitQueue("sockets_ibay_queue", routing_key="ibay.order_created"),
+    exchange=ibay_exchange,
+)
 async def handle_order_created(payload: dict) -> None:
     """Track order creation and send a notification only to the buyer."""
     buyer_id = payload.get("buyer_id")
@@ -44,7 +54,10 @@ async def handle_order_created(payload: dict) -> None:
     )
 
 
-@router.subscriber("ibay.order_updated")
+@router.subscriber(
+    RabbitQueue("sockets_ibay_queue", routing_key="ibay.order_updated"),
+    exchange=ibay_exchange,
+)
 async def handle_order_updated(payload: dict) -> None:
     """Monitor order status updates (DELIVERY, COMPLETED, FAILED, RETURNED)."""
     buyer_id = payload.get("buyer_id")

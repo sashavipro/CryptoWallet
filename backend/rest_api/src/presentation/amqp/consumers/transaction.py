@@ -5,6 +5,9 @@ import uuid
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
+from faststream.rabbit import ExchangeType
+from faststream.rabbit import RabbitExchange
+from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors.transaction import ProcessTransactionCallbackInteractor
@@ -12,8 +15,13 @@ from src.application.interactors.transaction import ProcessTransactionCallbackIn
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
 
+tx_exchange = RabbitExchange("tx_events", type=ExchangeType.TOPIC)
 
-@router.subscriber("eth.tx_initiated")
+
+@router.subscriber(
+    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_initiated"),
+    exchange=tx_exchange,
+)
 @inject
 async def handle_tx_initiated(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
@@ -24,7 +32,10 @@ async def handle_tx_initiated(
     )
 
 
-@router.subscriber("eth.tx_failed_initiation")
+@router.subscriber(
+    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_failed_initiation"),
+    exchange=tx_exchange,
+)
 @inject
 async def handle_tx_failed_initiation(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
@@ -37,7 +48,9 @@ async def handle_tx_failed_initiation(
     )
 
 
-@router.subscriber("eth.tx_success")
+@router.subscriber(
+    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_success"), exchange=tx_exchange
+)
 @inject
 async def handle_tx_success(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
@@ -48,7 +61,9 @@ async def handle_tx_success(
     await interactor(tx_id=tx_id, tx_hash=payload.get("tx_hash"), status="success")
 
 
-@router.subscriber("eth.tx_failed")
+@router.subscriber(
+    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_failed"), exchange=tx_exchange
+)
 @inject
 async def handle_tx_failed(
     payload: dict, interactor: FromDishka[ProcessTransactionCallbackInteractor]
