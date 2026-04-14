@@ -10,10 +10,10 @@ from src.application.ports.events import EventPublisher
 from src.infrastructure.message_broker.broker import broker
 
 logger = logging.getLogger(__name__)
-user_exchange = RabbitExchange("user_events", type=ExchangeType.TOPIC)
-stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC)
-ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC)
-ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC)
+user_exchange = RabbitExchange("user_events", type=ExchangeType.TOPIC, durable=True)
+stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC, durable=True)
+ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC, durable=True)
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC, durable=True)
 
 
 class EventPublisherImpl(EventPublisher):

@@ -9,7 +9,7 @@ from src.application.ports.providers import InternalApiClient
 
 logger = logging.getLogger(__name__)
 
-DELIVERY_SUCCESS_RATE = 0.8
+DELIVERY_SUCCESS_RATE = 1.0
 
 
 class UpdateOrderStatusInteractor:
@@ -26,10 +26,21 @@ class UpdateOrderStatusInteractor:
         order = await self.api_client.get_order_by_tx_hash(pending_hash)
         if not order:
             order = await self.api_client.get_order_by_tx_hash(real_tx_hash)
-        if not order or order.get("status") != "NEW":
+
+        if not order:
             return
 
-        new_status = "DELIVERY" if tx_status == "success" else "FAILED"
+        current_status = order.get("status")
+
+        if current_status == "NEW":
+            new_status = "DELIVERY" if tx_status == "success" else "FAILED"
+        elif current_status == "FAILED":
+            new_status = "RETURNED" if tx_status == "success" else "FAILED"
+            if new_status == current_status:
+                return
+        else:
+            return
+
         await self.api_client.update_order_status(
             order["id"], new_status, real_tx_hash=real_tx_hash
         )

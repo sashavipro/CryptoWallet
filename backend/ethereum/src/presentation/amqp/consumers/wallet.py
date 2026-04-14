@@ -2,7 +2,6 @@
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
-from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
 from src.application.interactors.wallet import CreateWalletInteractor
@@ -12,32 +11,26 @@ from src.application.interactors.wallet import ImportWalletInteractor
 router = RabbitRouter()
 
 
-@router.subscriber(
-    RabbitQueue("ethereum_wallet_queue", routing_key="eth.create_wallet")
-)
+@router.subscriber("eth.create_wallet")
 @inject
-async def handle_create_wallet(
-    interactor: FromDishka[CreateWalletInteractor],
-) -> dict[str, str]:
-    """Handle the creation of a new Ethereum wallet."""
+async def handle_create_wallet(interactor: FromDishka[CreateWalletInteractor]):
+    """Handle a request to create a new Ethereum wallet."""
     return await interactor()
 
 
-@router.subscriber(
-    RabbitQueue("ethereum_wallet_queue", routing_key="eth.import_wallet")
-)
+@router.subscriber("eth.import_wallet")
 @inject
 async def handle_import_wallet(
     payload: dict, interactor: FromDishka[ImportWalletInteractor]
-) -> dict[str, str]:
-    """Retrieve the address from the key and return it with the encrypted key."""
+):
+    """Handle a request to import an existing Ethereum wallet by private key."""
     return await interactor(payload["private_key"])
 
 
-@router.subscriber(RabbitQueue("ethereum_wallet_queue", routing_key="eth.get_balance"))
+@router.subscriber("eth.get_balance")
 @inject
 async def handle_get_balance(
     payload: dict, interactor: FromDishka[GetBalanceInteractor]
-) -> str:
-    """Retrieve the balance of a specific Ethereum address."""
+):
+    """Handle a request to get the ETH balance of a specific address."""
     return await interactor(payload["address"])

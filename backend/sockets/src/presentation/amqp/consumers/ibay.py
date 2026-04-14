@@ -11,11 +11,11 @@ from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
-ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC)
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC, durable=True)
 
 
 @router.subscriber(
-    RabbitQueue("sockets_ibay_queue", routing_key="ibay.product_created"),
+    RabbitQueue("sockets_ibay_product_queue", routing_key="ibay.product_created"),
     exchange=ibay_exchange,
 )
 async def handle_product_created(payload: dict) -> None:
@@ -34,7 +34,7 @@ async def handle_product_created(payload: dict) -> None:
 
 
 @router.subscriber(
-    RabbitQueue("sockets_ibay_queue", routing_key="ibay.order_created"),
+    RabbitQueue("sockets_ibay_order_created_queue", routing_key="ibay.order_created"),
     exchange=ibay_exchange,
 )
 async def handle_order_created(payload: dict) -> None:
@@ -55,7 +55,7 @@ async def handle_order_created(payload: dict) -> None:
 
 
 @router.subscriber(
-    RabbitQueue("sockets_ibay_queue", routing_key="ibay.order_updated"),
+    RabbitQueue("sockets_ibay_order_updated_queue", routing_key="ibay.order_updated"),
     exchange=ibay_exchange,
 )
 async def handle_order_updated(payload: dict) -> None:

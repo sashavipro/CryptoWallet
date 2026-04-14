@@ -355,5 +355,6 @@ class UpdateOrderStatusInteractor:
                             value_eth=str(refund_amount),
                         )
                         order.return_tx_hash = f"pending_{tx_id}"
+                        order.tx_hash = f"pending_{tx_id}"
 
             await self.order_gateway.update_order(order)

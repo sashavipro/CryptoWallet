@@ -19,7 +19,7 @@ tx_exchange = RabbitExchange("tx_events", type=ExchangeType.TOPIC)
 
 
 @router.subscriber(
-    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_initiated"),
+    RabbitQueue("rest_api_tx_init_queue", routing_key="eth.tx_initiated"),
     exchange=tx_exchange,
 )
 @inject
@@ -33,7 +33,7 @@ async def handle_tx_initiated(
 
 
 @router.subscriber(
-    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_failed_initiation"),
+    RabbitQueue("rest_api_tx_fail_init_queue", routing_key="eth.tx_failed_initiation"),
     exchange=tx_exchange,
 )
 @inject
@@ -49,7 +49,8 @@ async def handle_tx_failed_initiation(
 
 
 @router.subscriber(
-    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_success"), exchange=tx_exchange
+    RabbitQueue("rest_api_tx_success_queue", routing_key="eth.tx_success"),
+    exchange=tx_exchange,
 )
 @inject
 async def handle_tx_success(
@@ -62,7 +63,8 @@ async def handle_tx_success(
 
 
 @router.subscriber(
-    RabbitQueue("rest_api_tx_queue", routing_key="eth.tx_failed"), exchange=tx_exchange
+    RabbitQueue("rest_api_tx_failed_queue", routing_key="eth.tx_failed"),
+    exchange=tx_exchange,
 )
 @inject
 async def handle_tx_failed(

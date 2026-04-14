@@ -63,7 +63,11 @@ async def process_chat_message(
             "room_id": payload.get("room_id", "chat_global"),
         }
 
-        await broker.publish(broadcast_payload, queue="chat.broadcast_message")
+        await broker.publish(
+            broadcast_payload,
+            exchange=chat_exchange,
+            routing_key="chat.broadcast_message",
+        )
 
     except Exception:
         logger.exception("Error saving message to DB")

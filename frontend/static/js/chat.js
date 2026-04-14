@@ -126,7 +126,7 @@ function renderMessage(msg) {
             <span class="message-time">${timeStr}</span>
         </div>
         <div class="message-content">
-            ${textContent ? escapeHtml(textContent) : ''}
+            <span class="message-text">${textContent ? escapeHtml(textContent) : ''}</span>
             ${imgHtml}
         </div>
     `;

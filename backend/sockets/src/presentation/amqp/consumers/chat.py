@@ -11,19 +11,17 @@ from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
-stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC)
+chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC)
 
 
 @router.subscriber(
-    RabbitQueue("sockets_stats_queue", routing_key="stats.updated"),
-    exchange=stats_exchange,
+    RabbitQueue("sockets_chat_queue", routing_key="chat.broadcast_message"),
+    exchange=chat_exchange,
 )
 async def handle_broadcast_message(payload: dict) -> None:
-    """Retrieve a saved message from the broker and instantly broadcast it."""
+    """Broadcast a new chat message to all users in the specified room."""
     room_id = payload.get("room_id")
-
     if not room_id:
         return
-
     await sio.emit("new_message", payload, room=room_id, namespace="/chat")
     logger.info("WS: Broadcasted new message to chat room %s", room_id)

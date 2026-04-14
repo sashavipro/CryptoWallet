@@ -11,11 +11,12 @@ from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
-ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC)
+ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC, durable=True)
 
 
 @router.subscriber(
-    RabbitQueue("sockets_tx_queue", routing_key="ws.tx_updated"), exchange=ws_exchange
+    RabbitQueue("sockets_tx_status_queue", routing_key="ws.tx_updated"),
+    exchange=ws_exchange,
 )
 async def handle_tx_status_update(payload: dict) -> None:
     """Listen for transaction status updates and broadcast to WS."""
@@ -44,7 +45,7 @@ async def handle_tx_status_update(payload: dict) -> None:
 
 
 @router.subscriber(
-    RabbitQueue("sockets_tx_queue", routing_key="ws.balance_updated"),
+    RabbitQueue("sockets_balance_queue", routing_key="ws.balance_updated"),
     exchange=ws_exchange,
 )
 async def handle_balance_updated(payload: dict) -> None:
