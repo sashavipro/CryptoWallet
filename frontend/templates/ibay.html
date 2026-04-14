@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}iBay - Crypto Wallet{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Базовые стили для iBay */
+    .ibay-container { padding: 20px; }
+    .ibay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .ibay-actions { display: flex; gap: 10px; }
+
+    .btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+    .btn-primary { background-color: #007bff; color: white; }
+    .btn-primary:hover { background-color: #0056b3; }
+    .btn-secondary { background-color: #e2e6ea; color: #333; }
+    .btn-secondary.active { background-color: #6c757d; color: white; }
+    .btn-success { background-color: #28a745; color: white; width: 100%; margin-top: 10px;}
+
+    /* Сетка товаров */
+    .items-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+    .product-card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+    .product-img { width: 100%; height: 150px; background-color: #f0f0f0; border-radius: 4px; object-fit: cover; margin-bottom: 10px; }
+    .product-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+    .product-price { color: #28a745; font-weight: bold; margin-bottom: 15px; font-size: 18px; }
+
+    /* Список заказов */
+    .orders-list { display: flex; flex-direction: column; gap: 10px; }
+    .order-card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center;}
+    .order-status { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+    .status-new { background: #cce5ff; color: #004085; }
+    .status-delivery { background: #fff3cd; color: #856404; }
+    .status-completed { background: #d4edda; color: #155724; }
+    .status-failed, .status-returned { background: #f8d7da; color: #721c24; }
+
+    /* Модальные окна */
+    .hidden { display: none !important; }
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 400px; position: relative; }
+    .close-modal { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: #666; }
+
+    /* Формы */
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-size: 14px; font-weight: bold;}
+    .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ibay-container">
+    <div class="ibay-header">
+        <h2>iBay Marketplace</h2>
+        <div class="ibay-actions">
+            <button id="btnShowProducts" class="btn btn-secondary active">Все товары</button>
+            <button id="btnShowOrders" class="btn btn-secondary">Мои заказы</button>
+            <button id="btnOpenCreateModal" class="btn btn-primary">+ Создать товар</button>
+        </div>
+    </div>
+
+    <div id="productsView" class="items-grid">
+        <p>Загрузка товаров...</p>
+    </div>
+
+    <div id="ordersView" class="orders-list hidden">
+        </div>
+</div>
+
+<div id="modalCreateProduct" class="modal-overlay hidden">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('modalCreateProduct')">&times;</span>
+        <h3>Добавить товар</h3>
+        <form id="formCreateProduct" style="margin-top: 15px;">
+            <div class="form-group">
+                <label>Название</label>
+                <input type="text" id="prodTitle" required placeholder="Например: Ноутбук">
+            </div>
+            <div class="form-group">
+                <label>Цена (ETH)</label>
+                <input type="number" step="0.000001" id="prodPrice" required placeholder="0.05">
+            </div>
+            <div class="form-group">
+                <label>URL Фото (опционально)</label>
+                <input type="url" id="prodPhotoUrl" placeholder="https://...">
+            </div>
+            <div class="form-group">
+                <label>Кошелек зачисления (Ваш)</label>
+                <select id="prodWalletSelect" required>
+                    <option value="">Загрузка кошельков...</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Опубликовать</button>
+        </form>
+    </div>
+</div>
+
+<div id="modalBuyProduct" class="modal-overlay hidden">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('modalBuyProduct')">&times;</span>
+        <h3>Оформление заказа</h3>
+        <div style="margin: 15px 0; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+            <strong id="buyTitle">Название товара</strong><br>
+            <span id="buyPrice" style="color: #28a745; font-weight: bold;">0.00 ETH</span>
+        </div>
+        <form id="formBuyProduct">
+            <input type="hidden" id="buyProductId">
+            <div class="form-group">
+                <label>Оплатить с кошелька</label>
+                <select id="buyWalletSelect" required>
+                    <option value="">Загрузка кошельков...</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success">Подтвердить оплату</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="/static/js/ibay.js"></script>
+{% endblock %}

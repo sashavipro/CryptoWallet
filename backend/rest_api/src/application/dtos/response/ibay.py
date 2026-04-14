@@ -15,6 +15,7 @@ class ProductResponseDTO:
     id: uuid.UUID
     user_id: uuid.UUID
     wallet_id: uuid.UUID
+    seller_address: str
     title: str
     price_eth: Decimal
     photo_url: str | None

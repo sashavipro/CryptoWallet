@@ -15,14 +15,21 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.templating import Jinja2Templates
 
 from src.application.interactors import ChangePasswordInteractor
+from src.application.interactors import CreateOrderInteractor
 from src.application.interactors import CreatePendingTransactionInteractor
+from src.application.interactors import CreateProductInteractor
 from src.application.interactors import CreateWalletInteractor
 from src.application.interactors import DeleteAvatarInteractor
 from src.application.interactors import DeleteWalletInteractor
 from src.application.interactors import GenerateAvatarUploadUrlInteractor
 from src.application.interactors import GetAssetsInteractor
 from src.application.interactors import GetBalanceInteractor
+from src.application.interactors import GetChatHistoryInteractor
+from src.application.interactors import GetOldestDeliveryOrderInteractor
+from src.application.interactors import GetOrderByTxHashInteractor
+from src.application.interactors import GetOrdersInteractor
 from src.application.interactors import GetOtherProfileInteractor
+from src.application.interactors import GetProductsInteractor
 from src.application.interactors import GetStatsInteractor
 from src.application.interactors import GetTransactionsInteractor
 from src.application.interactors import GetUserInteractor
@@ -30,17 +37,19 @@ from src.application.interactors import GetWalletsInteractor
 from src.application.interactors import ImportWalletInteractor
 from src.application.interactors import IncrementTotalMessagesInteractor
 from src.application.interactors import LoginUserInteractor
+from src.application.interactors import ProcessTransactionCallbackInteractor
 from src.application.interactors import RegisterUserInteractor
 from src.application.interactors import RequestTestnetEthInteractor
+from src.application.interactors import SyncAllWalletsBalanceInteractor
+from src.application.interactors import UpdateOrderStatusInteractor
 from src.application.interactors import UpdateUserInteractor
-from src.application.interactors.chat import GetChatHistoryInteractor
-from src.application.interactors.transaction import ProcessTransactionCallbackInteractor
-from src.application.interactors.wallet import SyncAllWalletsBalanceInteractor
 from src.application.ports.events import EventPublisher
 from src.application.ports.gateways import AssetGateway
 from src.application.ports.gateways import ChatMessageGateway
 from src.application.ports.gateways import ChatUserGateway
+from src.application.ports.gateways import OrderGateway
 from src.application.ports.gateways import PermissionGateway
+from src.application.ports.gateways import ProductGateway
 from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways import TransactionGateway
 from src.application.ports.gateways import UnitOfWork
@@ -68,6 +77,8 @@ from src.infrastructure.persistence.database.gateways import MongoChatUserGatewa
 from src.infrastructure.persistence.database.gateways import (
     PermissionGateway as SqlaPermissionGateway,
 )
+from src.infrastructure.persistence.database.gateways import SqlaOrderGateway
+from src.infrastructure.persistence.database.gateways import SqlaProductGateway
 from src.infrastructure.persistence.database.gateways import SqlaUnitOfWork
 from src.infrastructure.persistence.database.gateways import (
     TransactionGateway as SqlaTransactionGateway,
@@ -283,6 +294,12 @@ class DbProvider(Provider):
     wallet_gateway = provide(
         SqlaWalletGateway, scope=Scope.REQUEST, provides=WalletGateway
     )
+    product_gateway = provide(
+        SqlaProductGateway, scope=Scope.REQUEST, provides=ProductGateway
+    )
+    order_gateway = provide(
+        SqlaOrderGateway, scope=Scope.REQUEST, provides=OrderGateway
+    )
 
 
 class InteractorProvider(Provider):
@@ -327,3 +344,12 @@ class InteractorProvider(Provider):
 
     # Chat
     get_chat_history_interactor = provide(GetChatHistoryInteractor)
+
+    # iBay
+    create_product_interactor = provide(CreateProductInteractor)
+    get_products_interactor = provide(GetProductsInteractor)
+    create_order_interactor = provide(CreateOrderInteractor)
+    get_orders_interactor = provide(GetOrdersInteractor)
+    get_order_by_tx_hash = provide(GetOrderByTxHashInteractor)
+    get_oldest_delivery_order = provide(GetOldestDeliveryOrderInteractor)
+    update_order_status = provide(UpdateOrderStatusInteractor)

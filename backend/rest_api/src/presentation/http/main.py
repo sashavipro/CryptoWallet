@@ -28,6 +28,7 @@ from src.presentation.http.routers.asset import router as asset_router
 from src.presentation.http.routers.auth import router as auth_router
 from src.presentation.http.routers.chat import router as chat_router
 from src.presentation.http.routers.faucet import router as faucet_router
+from src.presentation.http.routers.ibay import router as ibay_router
 from src.presentation.http.routers.pages import router as pages_router
 from src.presentation.http.routers.profile import router as profile_router
 from src.presentation.http.routers.transaction import router as transaction_router
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(transaction_router)
     app.include_router(asset_router)
     app.include_router(chat_router)
+    app.include_router(ibay_router)
 
     app.add_exception_handler(DomainException, domain_exception_handler)
     app.add_exception_handler(ValueError, value_error_handler)

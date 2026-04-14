@@ -49,3 +49,7 @@ class OrderGateway(Protocol):
     async def update_order(self, order: Order) -> Order:
         """Update an existing order's data (e.g., status changes)."""
         ...
+
+    async def get_order_by_tx_hash(self, tx_hash: str) -> Order | None:
+        """Retrieve an order by its transaction hash."""
+        ...

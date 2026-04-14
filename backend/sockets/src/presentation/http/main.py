@@ -13,6 +13,7 @@ from src.infrastructure.message_broker.broker import broker
 from src.ioc.container import create_container
 from src.presentation.amqp.consumers import router as amqp_router
 from src.presentation.ws.namespaces import ChatNamespace
+from src.presentation.ws.namespaces import IbayNamespace
 from src.presentation.ws.namespaces import TransactionNamespace
 from src.presentation.ws.server import sio
 
@@ -22,6 +23,7 @@ MAX_RETRIES = 5
 container = create_container()
 sio.register_namespace(ChatNamespace("/chat", container=container))
 sio.register_namespace(TransactionNamespace("/transaction", container=container))
+sio.register_namespace(IbayNamespace("/ibay", container))
 
 broker.include_router(amqp_router)
 

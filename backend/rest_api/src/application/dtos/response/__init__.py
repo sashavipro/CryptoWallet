@@ -3,6 +3,8 @@
 from .auth import JWTPayload
 from .auth import TokenResponse
 from .chat import MessageResponse
+from .ibay import OrderResponseDTO
+from .ibay import ProductResponseDTO
 from .transaction import TransactionResponse
 from .user import PublicProfileResponse
 from .user import UserResponse
@@ -15,6 +17,8 @@ __all__ = (
     "CachedBalance",
     "JWTPayload",
     "MessageResponse",
+    "OrderResponseDTO",
+    "ProductResponseDTO",
     "PublicProfileResponse",
     "TokenResponse",
     "TransactionResponse",

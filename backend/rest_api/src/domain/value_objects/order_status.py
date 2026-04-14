@@ -1,13 +1,13 @@
 """rest_api/src/domain/value_objects/order_status.py."""
 
-import enum
+from enum import Enum
 
 
-class OrderStatus(enum.Enum):
-    """Enumeration representing the various states of an iBay order."""
+class OrderStatus(str, Enum):
+    """Enumeration representing the lifecycle states of an iBay order."""
 
-    NEW = "new"
-    DELIVERY = "delivery"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    RETURNED = "returned"
+    NEW = "NEW"
+    DELIVERY = "DELIVERY"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    RETURNED = "RETURNED"

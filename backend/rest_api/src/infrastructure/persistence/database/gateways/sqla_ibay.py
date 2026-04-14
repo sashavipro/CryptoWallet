@@ -51,7 +51,6 @@ class SqlaProductGateway(ProductGateway):
         stmt = select(DBProduct).order_by(DBProduct.created_at.desc())
         result = await self.session.execute(stmt)
         db_products = result.scalars().all()
-
         return [map_product_to_domain(p) for p in db_products]
 
 
@@ -79,6 +78,16 @@ class SqlaOrderGateway(OrderGateway):
             return None
         return map_order_to_domain(db_order)
 
+    async def get_order_by_tx_hash(self, tx_hash: str) -> DomainOrder | None:
+        """Fetch an order strictly by its transaction hash."""
+        stmt = select(DBOrder).where(DBOrder.tx_hash == tx_hash)
+        result = await self.session.execute(stmt)
+        db_order = result.scalars().first()
+
+        if not db_order:
+            return None
+        return map_order_to_domain(db_order)
+
     async def get_orders_by_buyer_id(self, buyer_id: uuid.UUID) -> list[DomainOrder]:
         """Fetch all orders for a specific buyer."""
         stmt = (
@@ -88,16 +97,12 @@ class SqlaOrderGateway(OrderGateway):
         )
         result = await self.session.execute(stmt)
         db_orders = result.scalars().all()
-
         return [map_order_to_domain(o) for o in db_orders]
 
     async def get_oldest_order_by_status(
         self, status: OrderStatus
     ) -> DomainOrder | None:
-        """Fetch the oldest order in a specific status.
-
-        Useful for background processing queue-like states.
-        """
+        """Fetch the oldest order in a specific status."""
         stmt = (
             select(DBOrder)
             .where(DBOrder.status == status)
@@ -112,7 +117,7 @@ class SqlaOrderGateway(OrderGateway):
         return map_order_to_domain(db_order)
 
     async def update_order(self, order: DomainOrder) -> DomainOrder:
-        """Update an existing order (e.g., after state transition)."""
+        """Update an existing order in the DB."""
         db_order = map_domain_to_order_model(order)
         merged_order = await self.session.merge(db_order)
         await self.session.flush()

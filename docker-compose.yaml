@@ -112,6 +112,53 @@ services:
     volumes:
       - .:/app
 
+  ibay_service:
+    build:
+      context: .
+      dockerfile: backend/ibay/deploy/server/Dockerfile
+    image: crypto_ibay_image
+    container_name: crypto_ibay
+    ports:
+      - "8003:8003"
+    env_file:
+      - backend/ibay/.env
+    depends_on:
+      - rabbitmq
+      - redis
+      - rest_api
+    volumes:
+      - .:/app
+
+  ibay_worker:
+    build:
+      context: .
+      dockerfile: backend/ibay/deploy/server/Dockerfile
+    container_name: crypto_ibay_worker
+    command: taskiq worker src.infrastructure.task_broker:taskiq_broker src.application.tasks.delivery
+    env_file:
+      - backend/ibay/.env
+    depends_on:
+      - postgres
+      - mongodb
+      - redis
+      - rabbitmq
+    volumes:
+      - .:/app
+
+  ibay_scheduler:
+    build:
+      context: .
+      dockerfile: backend/ibay/deploy/server/Dockerfile
+    container_name: crypto_ibay_scheduler
+    command: taskiq scheduler src.infrastructure.task_broker:scheduler src.application.tasks.delivery
+    env_file:
+      - backend/ibay/.env
+    depends_on:
+      - redis
+      - rabbitmq
+    volumes:
+      - .:/app
+
 volumes:
   postgres_data:
   mongodb_data:

@@ -3,6 +3,8 @@
 from .chat_mongo import MongoChatMessageGateway
 from .chat_mongo import MongoChatUserGateway
 from .sqla_asset import AssetGateway
+from .sqla_ibay import SqlaOrderGateway
+from .sqla_ibay import SqlaProductGateway
 from .sqla_permissions import PermissionGateway
 from .sqla_transaction import TransactionGateway
 from .sqla_uow import SqlaUnitOfWork
@@ -14,6 +16,8 @@ __all__ = (
     "MongoChatMessageGateway",
     "MongoChatUserGateway",
     "PermissionGateway",
+    "SqlaOrderGateway",
+    "SqlaProductGateway",
     "SqlaUnitOfWork",
     "TransactionGateway",
     "UserGateway",
