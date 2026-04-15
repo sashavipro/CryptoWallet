@@ -22,6 +22,7 @@ from .stats import GetStatsInteractor
 from .stats import IncrementTotalMessagesInteractor
 from .transaction import CreatePendingTransactionInteractor
 from .transaction import GetTransactionsInteractor
+from .transaction import ProcessDiscoveredTransactionInteractor
 from .transaction import ProcessTransactionCallbackInteractor
 from .wallet import CreateWalletInteractor
 from .wallet import DeleteWalletInteractor
@@ -58,6 +59,7 @@ __all__ = (
     "ImportWalletInteractor",
     "IncrementTotalMessagesInteractor",
     "LoginUserInteractor",
+    "ProcessDiscoveredTransactionInteractor",
     "ProcessTransactionCallbackInteractor",
     "RegisterUserInteractor",
     "RequestTestnetEthInteractor",

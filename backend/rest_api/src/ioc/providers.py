@@ -37,6 +37,7 @@ from src.application.interactors import GetWalletsInteractor
 from src.application.interactors import ImportWalletInteractor
 from src.application.interactors import IncrementTotalMessagesInteractor
 from src.application.interactors import LoginUserInteractor
+from src.application.interactors import ProcessDiscoveredTransactionInteractor
 from src.application.interactors import ProcessTransactionCallbackInteractor
 from src.application.interactors import RegisterUserInteractor
 from src.application.interactors import RequestTestnetEthInteractor
@@ -335,6 +336,7 @@ class InteractorProvider(Provider):
     create_transaction_interactor = provide(CreatePendingTransactionInteractor)
     get_transactions_interactor = provide(GetTransactionsInteractor)
     process_tx_callback_interactor = provide(ProcessTransactionCallbackInteractor)
+    process_discovered_tx_interactor = provide(ProcessDiscoveredTransactionInteractor)
 
     # Faucet
     request_faucet_interactor = provide(RequestTestnetEthInteractor)

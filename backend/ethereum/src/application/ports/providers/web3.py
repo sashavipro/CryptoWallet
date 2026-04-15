@@ -4,6 +4,8 @@ from decimal import Decimal
 from typing import Any
 from typing import Protocol
 
+from web3 import AsyncWeb3
+
 from src.domain.value_objects.shared.address import EthereumAddress
 
 
@@ -44,4 +46,12 @@ class Web3Provider(Protocol):
 
     async def get_gas_price(self) -> Decimal:
         """Get the current gas price from the network."""
+        ...
+
+    async def _get_working_w3(self) -> AsyncWeb3:
+        """Retrieve an active and connected AsyncWeb3 instance.
+
+        Iterates through the configured RPC/WSS fallback nodes and returns
+        the first one that successfully responds to a connection check.
+        """
         ...

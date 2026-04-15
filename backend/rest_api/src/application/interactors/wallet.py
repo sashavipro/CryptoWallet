@@ -7,6 +7,8 @@ from datetime import UTC
 from datetime import datetime
 from decimal import Decimal
 
+from redis.asyncio import Redis
+
 from src.application.dtos.request.wallet import CreateWalletRequest
 from src.application.dtos.request.wallet import ImportWalletRequest
 from src.application.dtos.response.wallet import WalletBalanceResponse
@@ -39,6 +41,7 @@ class CreateWalletInteractor:
         worker_client: EthereumWorkerClient,
         event_publisher: EventPublisher,
         stats_gateway: StatsGateway,
+        redis: Redis,
     ) -> None:
         """Initialize the interactor with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -48,6 +51,7 @@ class CreateWalletInteractor:
         self.worker_client = worker_client
         self.event_publisher = event_publisher
         self.stats_gateway = stats_gateway
+        self.redis = redis
 
     async def __call__(
         self, user_id: uuid.UUID, request: CreateWalletRequest
@@ -75,6 +79,8 @@ class CreateWalletInteractor:
 
         async with self.uow:
             await self.wallet_gateway.add_wallet(wallet)
+
+        await self.redis.sadd("tracked_wallets", wallet.address.lower())
 
         w_count = await self.stats_gateway.get_wallets_count(user_id)
         await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
@@ -278,12 +284,14 @@ class SyncAllWalletsBalanceInteractor:
         worker_client: EthereumWorkerClient,
         event_publisher: EventPublisher,
         uow: UnitOfWork,
+        redis: Redis,
     ) -> None:
         """Initialize the interactor with required gateways and publishers."""
         self.wallet_gateway = wallet_gateway
         self.worker_client = worker_client
         self.event_publisher = event_publisher
         self.uow = uow
+        self.redis = redis
         self.logger = logging.getLogger(__name__)
 
     async def __call__(self) -> None:
@@ -291,8 +299,9 @@ class SyncAllWalletsBalanceInteractor:
         async with self.uow:
             wallets = await self.wallet_gateway.get_all_wallets()
 
-        if not wallets:
-            return
+        if wallets:
+            addresses = [w.address.lower() for w in wallets]
+            await self.redis.sadd("tracked_wallets", *addresses)
 
         for wallet in wallets:
             try:

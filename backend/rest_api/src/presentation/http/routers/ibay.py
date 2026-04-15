@@ -7,6 +7,7 @@ from dishka.integrations.fastapi import inject
 from fastapi import APIRouter
 from fastapi import HTTPException
 from fastapi import status
+from fastapi_cache.decorator import cache
 
 from src.application.dtos.request.ibay import CreateOrderRequestDTO
 from src.application.dtos.request.ibay import CreateOrderSchema
@@ -38,6 +39,7 @@ router = APIRouter(prefix="/api/v1/ibay", tags=["ibay"])
     summary="Get All Products",
     description="Retrieve a list of all active products on iBay.",
 )
+@cache(expire=30)
 @inject
 async def get_products(
     interactor: FromDishka[GetProductsInteractor],

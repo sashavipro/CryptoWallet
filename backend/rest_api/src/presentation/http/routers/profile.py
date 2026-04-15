@@ -7,6 +7,7 @@ from dishka.integrations.fastapi import FromDishka
 from dishka.integrations.fastapi import inject
 from fastapi import APIRouter
 from fastapi import Depends
+from fastapi_cache.decorator import cache
 
 from src.application.dtos.request import ChangePasswordRequest
 from src.application.dtos.request import UpdateUserRequest
@@ -121,6 +122,7 @@ async def change_password(
     ),
     summary="Get Public Profile",
 )
+@cache(expire=60)
 @inject
 async def get_other_user_profile(
     target_user_id: uuid.UUID,

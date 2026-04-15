@@ -258,3 +258,79 @@ class GetTransactionsInteractor:
             )
 
         return pending_txs + etherscan_txs
+
+
+class ProcessDiscoveredTransactionInteractor:
+    """Processing a transaction found by the block scanner."""
+
+    def __init__(  # noqa: PLR0913
+        self,
+        wallet_gateway: WalletGateway,
+        tx_gateway: TransactionGateway,
+        uow: UnitOfWork,
+        event_publisher: EventPublisher,
+        id_generator: IdGenerator,
+        time_provider: TimeProvider,
+    ) -> None:
+        """Initialize the interactor with required gateways and utilities."""
+        self.wallet_gateway = wallet_gateway
+        self.tx_gateway = tx_gateway
+        self.uow = uow
+        self.event_publisher = event_publisher
+        self.id_generator = id_generator
+        self.time_provider = time_provider
+
+    async def __call__(
+        self,
+        tx_hash: str,
+        from_address: str,
+        to_address: str,
+        value: Decimal,
+        fee: Decimal,
+    ) -> None:
+        """Execute the use case to process a newly discovered transaction."""
+        async with self.uow:
+            existing_tx = await self.tx_gateway.get_transaction_by_hash(tx_hash)
+            if existing_tx:
+                return
+
+            wallets = await self.wallet_gateway.get_wallets_by_addresses(
+                [from_address, to_address]
+            )
+            if not wallets:
+                return
+
+            for wallet in wallets:
+                new_tx = Transaction(
+                    id=self.id_generator.generate(),
+                    wallet_id=wallet.id,
+                    tx_hash=tx_hash,
+                    from_address=from_address,
+                    to_address=to_address,
+                    value=value,
+                    tx_fee=fee,
+                    status=TransactionStatus.SUCCESS,
+                    created_at=self.time_provider.now(),
+                )
+                await self.tx_gateway.add_transaction(new_tx)
+
+                if to_address == wallet.address.lower():
+                    wallet.balance += value
+                elif from_address == wallet.address.lower():
+                    wallet.balance -= value + fee
+
+                await self.wallet_gateway.update_wallet(wallet)
+
+                await self.event_publisher.publish_tx_status_updated(
+                    user_id=str(wallet.user_id),
+                    wallet_id=str(wallet.id),
+                    tx_hash=tx_hash,
+                    status="success",
+                    value=str(value),
+                )
+
+                await self.event_publisher.publish_balance_updated(
+                    user_id=str(wallet.user_id),
+                    wallet_id=str(wallet.id),
+                    balance=str(wallet.balance),
+                )

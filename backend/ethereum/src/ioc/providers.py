@@ -7,6 +7,7 @@ from dishka import Scope
 from dishka import provide
 from redis.asyncio import Redis
 
+from src.application.interactors.block_scanner import BlockScannerInteractor
 from src.application.interactors.faucet import RequestTestnetEthInteractor
 from src.application.interactors.transaction import SendTransactionInteractor
 from src.application.interactors.transaction_watcher import (
@@ -98,3 +99,4 @@ class InteractorProvider(Provider):
     background_transaction_watcher_interactor = provide(
         BackgroundTransactionWatcherInteractor
     )
+    block_scanner_interactor = provide(BlockScannerInteractor)

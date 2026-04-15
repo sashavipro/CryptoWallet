@@ -53,3 +53,18 @@ class EventPublisherImpl(EventPublisher):
             await broker.publish(
                 payload, exchange=tx_exchange, routing_key="eth.tx_failed"
             )
+
+    async def publish_tx_discovered(
+        self, tx_hash: str, from_address: str, to_address: str, value: str, fee: str
+    ) -> None:
+        """Publish an event for a newly discovered transaction."""
+        payload = {
+            "tx_hash": tx_hash,
+            "from_address": from_address,
+            "to_address": to_address,
+            "value": value,
+            "fee": fee,
+        }
+        await broker.publish(
+            payload, exchange=tx_exchange, routing_key="eth.tx_discovered"
+        )

@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from decimal import Decimal
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
@@ -10,6 +11,9 @@ from faststream.rabbit import RabbitExchange
 from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
+from src.application.interactors.transaction import (
+    ProcessDiscoveredTransactionInteractor,
+)
 from src.application.interactors.transaction import ProcessTransactionCallbackInteractor
 
 logger = logging.getLogger(__name__)
@@ -78,4 +82,26 @@ async def handle_tx_failed(
         tx_hash=payload.get("tx_hash"),
         status="failed",
         error=payload.get("error", "Unknown error"),
+    )
+
+
+@router.subscriber(
+    RabbitQueue("rest_api_tx_discovered_queue", routing_key="eth.tx_discovered"),
+    exchange=tx_exchange,
+)
+@inject
+async def handle_tx_discovered(
+    payload: dict, interactor: FromDishka[ProcessDiscoveredTransactionInteractor]
+) -> None:
+    """Process INCOMING transactions found by the block parser."""
+    import asyncio
+
+    await asyncio.sleep(5)
+
+    await interactor(
+        tx_hash=payload["tx_hash"],
+        from_address=payload["from_address"],
+        to_address=payload["to_address"],
+        value=Decimal(payload["value"]),
+        fee=Decimal(payload["fee"]),
     )

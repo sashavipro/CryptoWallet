@@ -10,7 +10,12 @@ from dishka.integrations.faststream import setup_dishka as setup_dishka_faststre
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
 from faststream import FastStream
+from redis.asyncio import Redis
+from sqladmin import Admin
+from sqlalchemy.ext.asyncio import create_async_engine
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
@@ -19,7 +24,15 @@ from src.domain.exceptions import DomainException
 from src.infrastructure.log_config import setup_logging
 from src.infrastructure.message_broker.broker import broker
 from src.infrastructure.settings import cors_settings
+from src.infrastructure.settings import db_settings
+from src.infrastructure.settings import redis_settings
 from src.ioc.container import create_container
+from src.presentation.http.admin.auth import admin_auth_backend
+from src.presentation.http.admin.views import OrderAdmin
+from src.presentation.http.admin.views import ProductAdmin
+from src.presentation.http.admin.views import TransactionAdmin
+from src.presentation.http.admin.views import UserAdmin
+from src.presentation.http.admin.views import WalletAdmin
 from src.presentation.http.exception_handlers import domain_exception_handler
 from src.presentation.http.exception_handlers import http_exception_handler
 from src.presentation.http.exception_handlers import validation_exception_handler
@@ -73,6 +86,8 @@ async def lifespan(app: FastAPI):
                 raise
             logger.warning("RabbitMQ is not ready yet, retrying in 5s... Error: %s", e)
             await asyncio.sleep(5)
+    redis_cache = Redis.from_url(redis_settings.REDIS_URL)
+    FastAPICache.init(RedisBackend(redis_cache), prefix="fastapi-cache")
     sync_task = asyncio.create_task(background_balance_sync(app.state.dishka_container))
     yield
     sync_task.cancel()
@@ -113,6 +128,21 @@ def create_app() -> FastAPI:
     app.add_exception_handler(ValueError, value_error_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+    admin_engine = create_async_engine(db_settings.database_url, echo=False)
+
+    admin = Admin(
+        app=app,
+        engine=admin_engine,
+        authentication_backend=admin_auth_backend,
+        title="CryptoWallet Admin",
+    )
+
+    admin.add_view(UserAdmin)
+    admin.add_view(WalletAdmin)
+    admin.add_view(OrderAdmin)
+    admin.add_view(TransactionAdmin)
+    admin.add_view(ProductAdmin)
 
     container = create_container()
 
