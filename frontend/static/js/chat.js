@@ -1,7 +1,7 @@
 let chatSocket = null;
-let selectedImageFile = null; // Глобальная переменная для хранения выбранного файла
+let selectedImageFile = null;
 
-// Кэш для хранения Promise (защита от Race Condition)
+// Кэш для хранения Promise (защита от Race Condition при запросе профилей)
 const profileCache = {};
 
 document.addEventListener('UserDataLoaded', initChatPage);
@@ -13,15 +13,8 @@ async function initChatPage() {
     setupChatUIEvents();
 }
 
-// Умная функция получения профиля (имя + аватар) с кэшированием Promise
+// Умная функция получения профиля (имя + аватар + КОШЕЛЬКИ) с кэшированием
 function fetchProfile(userId) {
-    if (window.currentUser && window.currentUser.id === userId) {
-        return Promise.resolve({
-            username: window.currentUser.username,
-            avatar: window.currentUser.avatar_url || "/static/img/default-avatar.png"
-        });
-    }
-
     if (profileCache[userId]) {
         return profileCache[userId];
     }
@@ -35,7 +28,8 @@ function fetchProfile(userId) {
                 const data = await res.json();
                 return {
                     username: data.username,
-                    avatar: data.avatar_url || "/static/img/default-avatar.png"
+                    avatar: data.avatar_url || "/static/img/default-avatar.png",
+                    wallets: data.wallets ||[] // <-- Получаем кошельки
                 };
             }
         } catch (e) {
@@ -44,11 +38,72 @@ function fetchProfile(userId) {
 
         return {
             username: `User_${userId.substring(0,4)}`,
-            avatar: "/static/img/default-avatar.png"
+            avatar: "/static/img/default-avatar.png",
+            wallets:[]
         };
     })();
 
     return profileCache[userId];
+}
+
+// Открытие модалки профиля по клику на пользователя
+async function showUserProfile(userId) {
+    try {
+        const profile = await fetchProfile(userId);
+
+        document.getElementById('profileModalAvatar').src = profile.avatar;
+        document.getElementById('profileModalUsername').textContent = profile.username;
+
+        const walletsList = document.getElementById('profileWalletsList');
+        walletsList.innerHTML = '';
+
+        if (profile.wallets && profile.wallets.length > 0) {
+            profile.wallets.forEach(address => {
+                const li = document.createElement('li');
+                li.className = 'wallet-item';
+                li.innerHTML = `
+                    <span class="wallet-address" title="${address}">${address.substring(0, 6)}...${address.slice(-4)}</span>
+                    <button class="btn-copy" onclick="copyToClipboard('${address}')" title="Скопировать">
+                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                    </button>
+                `;
+                walletsList.appendChild(li);
+            });
+        } else {
+            walletsList.innerHTML = '<li style="font-size: 13px; color: #888; text-align: center; padding: 10px;">У пользователя нет кошельков</li>';
+        }
+
+        document.getElementById('modalUserProfile').classList.remove('hidden');
+    } catch (e) {
+        console.error("Ошибка при открытии профиля", e);
+    }
+}
+
+// Глобальная функция копирования в буфер обмена
+window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification("Адрес скопирован!", false);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+};
+
+// Функция для красивых всплывающих уведомлений
+function showNotification(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    Object.assign(toast.style, {
+        position: 'fixed', bottom: '20px', right: '20px', padding: '12px 20px',
+        background: isError ? '#e74c3c' : '#2ecc71', color: 'white',
+        borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        zIndex: '10000', transition: 'opacity 0.3s ease-in-out',
+        fontWeight: 'bold', fontSize: '14px'
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
 }
 
 async function loadChatHistory() {
@@ -94,9 +149,13 @@ function renderMessage(msg) {
     const chatBox = document.getElementById('chatMessages');
     const isOwn = window.currentUser && msg.user_id === window.currentUser.id;
 
-    let timeStr = msg.created_at
-        ? new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-        : '---';
+    // Форматирование даты: "23 Jan 2:00"
+    let dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
+    const day = dateObj.getDate();
+    const month = dateObj.toLocaleString('en-US', { month: 'short' });
+    const hours = dateObj.getHours();
+    const minutes = dateObj.getMinutes().toString().padStart(2, '0');
+    let timeStr = `${day} ${month} ${hours}:${minutes}`;
 
     const authorSpanId = `author-${crypto.randomUUID()}`;
     const avatarImgId = `avatar-${crypto.randomUUID()}`;
@@ -106,33 +165,37 @@ function renderMessage(msg) {
 
     const textContent = msg.text || msg.message_text || "";
 
-    // --- ИЗМЕНЕНИЕ: ЛОГИКА ОТРИСОВКИ КАРТИНКИ ---
     let imgHtml = '';
-    // Проверяем оба варианта: может прийти готовый URL из базы или просто ключ
     const imageUrl = msg.image_url || (msg.image_key ? `https://my-s3-bucket.com/${msg.image_key}` : null);
-
     if (imageUrl) {
-        // Добавляем обработчик onload, чтобы скролл сработал ПОСЛЕ загрузки большой картинки
         imgHtml = `<img src="${imageUrl}" class="message-image" alt="Attachment" onload="scrollToBottom()">`;
     }
 
-    // Если нет ни текста, ни картинки - не рендерим пустой пузырь
     if (!textContent && !imgHtml) return;
 
-    msgDiv.innerHTML = `
-        <div class="message-info">
-            <img src="/static/img/default-avatar.png" id="${avatarImgId}" style="width: 20px; height: 20px; border-radius: 4px; object-fit: cover;">
-            <span class="message-author" id="${authorSpanId}">Loading...</span>
-            <span class="message-time">${timeStr}</span>
-        </div>
-        <div class="message-content">
-            <span class="message-text">${textContent ? escapeHtml(textContent) : ''}</span>
+    // Структура заголовка в зависимости от авторства
+    let headerHtml = isOwn
+        ? `<span class="msg-time">${timeStr}</span><span class="msg-name" id="${authorSpanId}">Loading...</span>`
+        : `<span class="msg-name" id="${authorSpanId}">Loading...</span><span class="msg-time">${timeStr}</span>`;
+
+    // Структура тела с кликабельными аватарами
+    let bodyHtml = `
+        ${!isOwn ? `<img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">` : ''}
+        <div class="msg-text">
+            ${textContent ? escapeHtml(textContent) : ''}
             ${imgHtml}
         </div>
+        ${isOwn ? `<img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">` : ''}
+    `;
+
+    msgDiv.innerHTML = `
+        <div class="message-header">${headerHtml}</div>
+        <div class="message-body">${bodyHtml}</div>
     `;
 
     chatBox.appendChild(msgDiv);
 
+    // Подтягиваем данные профиля
     fetchProfile(msg.user_id).then(profile => {
         const nameEl = document.getElementById(authorSpanId);
         const avatarEl = document.getElementById(avatarImgId);
@@ -143,9 +206,7 @@ function renderMessage(msg) {
 
 function renderOnlineUsers(users) {
     const list = document.getElementById('onlineUsersList');
-    const uniqueUsers = Array.isArray(users) ? [...new Set(users)] : [];
-
-    document.getElementById('onlineCount').textContent = uniqueUsers.length;
+    const uniqueUsers = Array.isArray(users) ? [...new Set(users)] :[];
 
     let html = '';
 
@@ -156,15 +217,9 @@ function renderOnlineUsers(users) {
         const defaultAvatarUrl = "/static/img/default-avatar.png";
 
         html += `
-            <li class="online-user">
-                <div class="online-avatar-wrapper">
-                    <img src="${defaultAvatarUrl}" alt="Avatar" id="${avatarImgId}" class="online-avatar">
-                    <div class="online-status-dot"></div>
-                </div>
-                <div class="online-user-info">
-                    <span class="online-username" id="${nameSpanId}">Загрузка...</span>
-                    <span class="online-role">В сети</span>
-                </div>
+            <li class="online-user" onclick="showUserProfile('${userId}')">
+                <img src="${defaultAvatarUrl}" alt="Avatar" id="${avatarImgId}" class="online-avatar">
+                <span class="online-username" id="${nameSpanId}">Загрузка...</span>
             </li>
         `;
     });
@@ -173,12 +228,9 @@ function renderOnlineUsers(users) {
 
     uniqueUsers.forEach(user => {
         let userId = typeof user === 'string' ? user : user.id;
-        const nameSpanId = `online-name-${userId}`;
-        const avatarImgId = `online-avatar-${userId}`;
-
         fetchProfile(userId).then(profile => {
-            const el = document.getElementById(nameSpanId);
-            const avatarEl = document.getElementById(avatarImgId);
+            const el = document.getElementById(`online-name-${userId}`);
+            const avatarEl = document.getElementById(`online-avatar-${userId}`);
 
             if (window.currentUser && userId === window.currentUser.id) {
                 if (el) el.textContent = profile.username + " (Вы)";
@@ -190,133 +242,72 @@ function renderOnlineUsers(users) {
     });
 }
 
-// --- ИЗМЕНЕНИЕ: ЛОГИКА РАБОТЫ С UI КАРТИНОК ---
 function setupChatUIEvents() {
     const sendBtn = document.getElementById('btnSendMsg');
     const input = document.getElementById('chatInput');
-    const fileInput = document.getElementById('chatImageInput'); // Скрытый input[type=file]
-    const attachBtn = document.getElementById('btnAttach'); // Кнопка со скрепкой
-    const removeImgBtn = document.getElementById('removeImageBtn');
+    const fileInput = document.getElementById('chatImageInput');
+    const attachBtn = document.getElementById('btnAttach');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
 
-    // При клике на Enter или кнопку "Отправить"
     sendBtn.addEventListener('click', sendMessage);
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
 
-    // При клике на скрепку - имитируем клик по скрытому input
     if (attachBtn && fileInput) {
-        attachBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
+        attachBtn.addEventListener('click', () => fileInput.click());
     }
 
-    // Когда пользователь выбрал картинку в диалоговом окне
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
             if (e.target.files.length > 0) {
                 selectedImageFile = e.target.files[0];
-
-                // Проверяем тип файла (на всякий случай)
                 if (!selectedImageFile.type.startsWith('image/')) {
                     alert("Пожалуйста, выберите изображение (JPG, PNG, WEBP).");
                     clearImageSelection();
                     return;
                 }
-
-                // Читаем файл локально для превью через FileReader
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    document.getElementById('imagePreview').src = event.target.result;
-                    document.getElementById('imagePreviewContainer').style.display = 'block';
-                    // Фокус обратно на инпут текста, чтобы было удобно печатать подпись
-                    input.focus();
-                };
-                reader.readAsDataURL(selectedImageFile);
+                if (fileNameDisplay) {
+                    fileNameDisplay.textContent = selectedImageFile.name; // Показываем название как на макете
+                }
+                input.focus();
             }
-        });
-    }
-
-    // Когда пользователь передумал и нажал крестик на превью
-    if (removeImgBtn) {
-        removeImgBtn.addEventListener('click', () => {
-            clearImageSelection();
         });
     }
 }
 
-// Вспомогательная функция очистки выбранной картинки
 function clearImageSelection() {
     selectedImageFile = null;
     const fileInput = document.getElementById('chatImageInput');
     if (fileInput) fileInput.value = '';
-
-    const previewContainer = document.getElementById('imagePreviewContainer');
-    if (previewContainer) previewContainer.style.display = 'none';
-
-    const previewImg = document.getElementById('imagePreview');
-    if (previewImg) previewImg.src = '';
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    if (fileNameDisplay) fileNameDisplay.textContent = '';
 }
 
-// --- ИЗМЕНЕНИЕ: ОТПРАВКА СООБЩЕНИЯ С КАРТИНКОЙ ---
 async function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
 
-    // Блокируем отправку, если пусто и нет картинки
     if (!text && !selectedImageFile) return;
 
     let imageKey = null;
 
-    // ЗАГОТОВКА ДЛЯ S3 (пока не подключен DigitalOcean Spaces):
     if (selectedImageFile) {
-        /* // --- ЭТОТ БЛОК РАСКОММЕНТИРУЕТЕ, КОГДА НАСТРОИТЕ DO SPACES ---
-
-        try {
-            // 1. Получаем presigned URL от нашего бэкенда
-            const presignedRes = await fetch(`/api/v1/profile/generate-upload-url?filename=${encodeURIComponent(selectedImageFile.name)}&file_type=chat`, {
-                headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
-            });
-
-            if (!presignedRes.ok) throw new Error("Failed to get presigned URL");
-            const uploadData = await presignedRes.json();
-
-            // 2. Отправляем сам файл напрямую в DigitalOcean Spaces (S3)
-            const uploadRes = await fetch(uploadData.upload_url, {
-                method: 'PUT',
-                body: selectedImageFile,
-                headers: { 'Content-Type': selectedImageFile.type }
-            });
-
-            if (!uploadRes.ok) throw new Error("Failed to upload to S3");
-
-            // 3. Сохраняем ключ, чтобы передать его в сокет
-            imageKey = uploadData.file_key;
-        } catch (error) {
-            console.error("Ошибка загрузки изображения:", error);
-            alert("Не удалось загрузить изображение. Попробуйте позже.");
-            return; // Прерываем отправку сообщения, если картинка не загрузилась
-        }
-        */
-
-        // ВРЕМЕННАЯ ЗАГЛУШКА ПОКА S3 НЕ РАБОТАЕТ:
+        // Заглушка для S3, пока он не подключен
         console.warn("S3 upload is currently disabled. Sending fake image key.");
-        // imageKey = "fake_chat_image.png"; // Раскомментируйте, чтобы протестировать логику сокетов
+        // imageKey = "fake_chat_image.png";
     }
 
-    // Отправляем всё в сокет
     if (chatSocket && chatSocket.connected) {
         chatSocket.emit("send_message", {
             room_id: "chat_global",
             text: text,
-            image_key: imageKey, // Передаем ключ (или null, если нет картинки)
+            image_key: imageKey,
             temp_id: crypto.randomUUID()
         }, (response) => {
-            // Callback от сервера: проверяем, не сработал ли rate limit
             if (response && response.status === "error") {
                 alert(response.message || "Ошибка при отправке сообщения");
             } else {
-                // Очищаем инпут и превью только если сообщение ушло успешно
                 input.value = '';
                 clearImageSelection();
             }
@@ -332,7 +323,12 @@ function escapeHtml(unsafe) {
 
 function scrollToBottom() {
     const chatBox = document.getElementById('chatMessages');
-    if (chatBox) {
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
+    if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
 }

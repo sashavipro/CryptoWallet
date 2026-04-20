@@ -10,6 +10,7 @@ from src.application.dtos.response import PublicProfileResponse
 from src.application.dtos.response import UserResponse
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
+from src.application.ports.gateways import WalletGateway
 from src.application.ports.providers import FileUploader
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
@@ -46,22 +47,28 @@ class GetUserInteractor:
             is_active=user.is_active,
             created_at=user.created_at,
             avatar_url=user.avatar_url,
-            has_chat_access=has_chat_access,  # Добавляем флаг!
+            has_chat_access=has_chat_access,
         )
 
 
 class GetOtherProfileInteractor:
     """Use Case for retrieving another user's public profile."""
 
-    def __init__(self, user_gateway: UserGateway) -> None:
-        """Initialize the interactor with a user gateway."""
+    def __init__(
+        self, user_gateway: UserGateway, wallet_gateway: WalletGateway
+    ) -> None:
+        """Initialize the interactor with user and wallet gateways."""
         self.user_gateway = user_gateway
+        self.wallet_gateway = wallet_gateway
 
     async def __call__(self, user_id: uuid.UUID) -> PublicProfileResponse:
         """Execute the retrieval of another user's public profile."""
         user = await self.user_gateway.get_user_by_id(user_id)
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
+
+        wallets = await self.wallet_gateway.get_wallets_by_user_id(user_id)
+        wallet_addresses = [w.address for w in wallets]
 
         now = datetime.now(UTC)
         time_since_registration = (now - user.created_at).total_seconds()
@@ -72,6 +79,7 @@ class GetOtherProfileInteractor:
             username=user.username,
             avatar_url=user.avatar_url,
             has_chat_access=has_chat_access,
+            wallets=wallet_addresses,
         )
 
 

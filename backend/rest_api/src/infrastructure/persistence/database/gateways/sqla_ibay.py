@@ -2,6 +2,7 @@
 
 import uuid
 
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -79,8 +80,10 @@ class SqlaOrderGateway(OrderGateway):
         return map_order_to_domain(db_order)
 
     async def get_order_by_tx_hash(self, tx_hash: str) -> DomainOrder | None:
-        """Fetch an order strictly by its transaction hash."""
-        stmt = select(DBOrder).where(DBOrder.tx_hash == tx_hash)
+        """Fetch an order strictly by its transaction hash OR return_tx_hash."""
+        stmt = select(DBOrder).where(
+            or_(DBOrder.tx_hash == tx_hash, DBOrder.return_tx_hash == tx_hash)
+        )
         result = await self.session.execute(stmt)
         db_order = result.scalars().first()
 

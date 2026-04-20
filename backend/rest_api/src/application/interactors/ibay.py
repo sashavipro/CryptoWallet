@@ -285,7 +285,7 @@ class GetOldestDeliveryOrderInteractor:
 
 
 class UpdateOrderStatusInteractor:
-    """Use Case: Update an order's status and trigger refund if needed."""
+    """Use Case: Update the status of an order and handle potential refunds."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -309,7 +309,7 @@ class UpdateOrderStatusInteractor:
         self.uow = uow
 
     async def __call__(self, request: UpdateOrderRequestDTO) -> None:
-        """Execute the use case to update an order's status and handle refunds."""
+        """Execute the use case to update an order's status."""
         async with self.uow:
             order = await self.order_gateway.get_order_by_id(request.order_id)
             if not order:
@@ -318,8 +318,12 @@ class UpdateOrderStatusInteractor:
             order.status = request.status
             if request.return_tx_hash:
                 order.return_tx_hash = request.return_tx_hash
+
             if request.tx_hash:
-                order.tx_hash = request.tx_hash
+                if request.status == OrderStatus.RETURNED:
+                    order.return_tx_hash = request.tx_hash
+                else:
+                    order.tx_hash = request.tx_hash
 
             if request.status == OrderStatus.FAILED and request.trigger_refund:
                 product = await self.product_gateway.get_product_by_id(order.product_id)
@@ -355,6 +359,5 @@ class UpdateOrderStatusInteractor:
                             value_eth=str(refund_amount),
                         )
                         order.return_tx_hash = f"pending_{tx_id}"
-                        order.tx_hash = f"pending_{tx_id}"
 
             await self.order_gateway.update_order(order)

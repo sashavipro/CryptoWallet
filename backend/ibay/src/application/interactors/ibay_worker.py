@@ -9,7 +9,7 @@ from src.application.ports.providers import InternalApiClient
 
 logger = logging.getLogger(__name__)
 
-DELIVERY_SUCCESS_RATE = 1.0
+DELIVERY_SUCCESS_RATE = 0.5
 
 
 class UpdateOrderStatusInteractor:
