@@ -4,107 +4,156 @@ let selectedImageFile = null;
 // Кэш для хранения Promise (защита от Race Condition при запросе профилей)
 const profileCache = {};
 
+// Текущий открытый профиль в модалке
+let currentOpenProfileId = null;
+
 document.addEventListener('UserDataLoaded', initChatPage);
 if (window.currentUser) { initChatPage(); }
 
 async function initChatPage() {
+    initChatSocket(); // Инициализируем сокет ПЕРЕД загрузкой истории
     await loadChatHistory();
-    initChatSocket();
     setupChatUIEvents();
 }
 
-// Умная функция получения профиля (имя + аватар + КОШЕЛЬКИ) с кэшированием
-function fetchProfile(userId) {
-    if (profileCache[userId]) {
+// ==========================================
+// ЛОГИКА ПРОФИЛЕЙ И МОДАЛКИ
+// ==========================================
+
+// Умная функция получения профиля через WEBSOCKETS с принудительным обновлением
+function fetchProfile(userId, forceRefresh = false) {
+    if (!forceRefresh && profileCache[userId]) {
         return profileCache[userId];
     }
 
-    profileCache[userId] = (async () => {
-        try {
-            const res = await fetch(`/api/v1/profile/${userId}`, {
-                headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
+    const fetchPromise = new Promise((resolve) => {
+        if (!chatSocket || !chatSocket.connected) {
+            resolve({
+                username: `User_${userId.substring(0,4)}`,
+                avatar: "/static/img/default-avatar.png",
+                wallets:[],
+                has_chat_access: false
             });
-            if (res.ok) {
-                const data = await res.json();
-                return {
-                    username: data.username,
-                    avatar: data.avatar_url || "/static/img/default-avatar.png",
-                    wallets: data.wallets ||[] // <-- Получаем кошельки
-                };
-            }
-        } catch (e) {
-            console.warn("Не удалось подгрузить профиль для", userId);
+            return;
         }
 
-        return {
-            username: `User_${userId.substring(0,4)}`,
-            avatar: "/static/img/default-avatar.png",
-            wallets:[]
-        };
-    })();
+        // Запрашиваем профиль через WebSocket
+        chatSocket.emit("get_user_profile", { target_user_id: userId }, (response) => {
+            if (response && response.status === "success") {
+                resolve({
+                    username: response.data.username,
+                    avatar: response.data.avatar_url || "/static/img/default-avatar.png",
+                    has_chat_access: response.data.has_chat_access,
+                    wallets: response.data.wallets ||[]
+                });
+            } else {
+                resolve({
+                    username: `User_${userId.substring(0,4)}`,
+                    avatar: "/static/img/default-avatar.png",
+                    wallets:[],
+                    has_chat_access: false
+                });
+            }
+        });
+    });
 
-    return profileCache[userId];
+    profileCache[userId] = fetchPromise;
+    return fetchPromise;
 }
 
-// Открытие модалки профиля по клику на пользователя
-async function showUserProfile(userId) {
+// Отрисовка данных внутри модалки
+async function updateProfileModalUI(userId) {
     try {
-        const profile = await fetchProfile(userId);
+        const profile = await fetchProfile(userId, true); // true = принудительно свежие данные
 
         document.getElementById('profileModalAvatar').src = profile.avatar;
         document.getElementById('profileModalUsername').textContent = profile.username;
 
-        const walletsList = document.getElementById('profileWalletsList');
-        walletsList.innerHTML = '';
-
-        if (profile.wallets && profile.wallets.length > 0) {
-            profile.wallets.forEach(address => {
-                const li = document.createElement('li');
-                li.className = 'wallet-item';
-                li.innerHTML = `
-                    <span class="wallet-address" title="${address}">${address.substring(0, 6)}...${address.slice(-4)}</span>
-                    <button class="btn-copy" onclick="copyToClipboard('${address}')" title="Скопировать">
-                        <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                    </button>
-                `;
-                walletsList.appendChild(li);
-            });
-        } else {
-            walletsList.innerHTML = '<li style="font-size: 13px; color: #888; text-align: center; padding: 10px;">У пользователя нет кошельков</li>';
+        const accessEl = document.getElementById('profileModalChatAccess');
+        if (accessEl) {
+            if (profile.has_chat_access) {
+                accessEl.textContent = "Доступ к чату: Разрешён";
+                accessEl.style.color = "#28a745";
+            } else {
+                accessEl.textContent = "Доступ к чату: Запрещён";
+                accessEl.style.color = "#e74c3c";
+            }
         }
 
-        document.getElementById('modalUserProfile').classList.remove('hidden');
+        const walletsList = document.getElementById('profileWalletsList');
+        if (walletsList) {
+            walletsList.innerHTML = '';
+
+            if (profile.wallets && profile.wallets.length > 0) {
+                profile.wallets.forEach(address => {
+                    const li = document.createElement('li');
+                    li.className = 'wallet-item';
+                    li.innerHTML = `
+                        <span class="wallet-address" title="${address}">${address.substring(0, 6)}...${address.slice(-4)}</span>
+                        <button class="btn-copy" onclick="copyToClipboard('${address}')" title="Скопировать">
+                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+                        </button>
+                    `;
+                    walletsList.appendChild(li);
+                });
+            } else {
+                walletsList.innerHTML = '<li style="font-size: 13px; color: #888; text-align: center; padding: 10px;">У пользователя нет кошельков</li>';
+            }
+        }
     } catch (e) {
-        console.error("Ошибка при открытии профиля", e);
+        console.error("Ошибка обновления UI профиля", e);
     }
 }
 
-// Глобальная функция копирования в буфер обмена
-window.copyToClipboard = function(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        showNotification("Адрес скопирован!", false);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-    });
+// Открытие модалки профиля по клику на пользователя
+window.showUserProfile = async function(userId) {
+    currentOpenProfileId = userId;
+    document.getElementById('modalUserProfile').classList.remove('hidden');
+    await updateProfileModalUI(userId);
 };
 
-// Функция для красивых всплывающих уведомлений
-function showNotification(message, isError = false) {
-    const toast = document.createElement('div');
-    toast.textContent = message;
-    Object.assign(toast.style, {
-        position: 'fixed', bottom: '20px', right: '20px', padding: '12px 20px',
-        background: isError ? '#e74c3c' : '#2ecc71', color: 'white',
-        borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-        zIndex: '10000', transition: 'opacity 0.3s ease-in-out',
-        fontWeight: 'bold', fontSize: '14px'
+// Закрытие модалки
+window.closeUserProfileModal = function() {
+    document.getElementById('modalUserProfile').classList.add('hidden');
+    currentOpenProfileId = null;
+};
+
+
+// ==========================================
+// ЛОГИКА WEBSOCKET СЕРВЕРА
+// ==========================================
+
+function initChatSocket() {
+    const token = getCookie('access_token');
+    if (!token) return;
+
+    chatSocket = io("/chat", {
+        auth: { token: token },
+        transports: ['websocket', 'polling']
     });
-    document.body.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 2500);
+
+    chatSocket.on('online_users_list', (data) => {
+        renderOnlineUsers(data.users);
+    });
+
+    chatSocket.on('new_message', (msg) => {
+        renderMessage(msg);
+        scrollToBottom();
+    });
+
+    // РЕАКТИВНОЕ ОБНОВЛЕНИЕ МОДАЛКИ (Event-Driven)
+    chatSocket.on('user_profile_updated', (data) => {
+        // Если пришло событие, что профиль обновился, и мы прямо сейчас на него смотрим — обновляем модалку
+        if (currentOpenProfileId === data.user_id) {
+            console.log("Получено WS событие: обновление профиля для", data.user_id);
+            updateProfileModalUI(data.user_id);
+        }
+    });
 }
+
+// ==========================================
+// ИСТОРИЯ И ОТРИСОВКА СООБЩЕНИЙ
+// ==========================================
 
 async function loadChatHistory() {
     try {
@@ -126,30 +175,10 @@ async function loadChatHistory() {
     }
 }
 
-function initChatSocket() {
-    const token = getCookie('access_token');
-    if (!token) return;
-
-    chatSocket = io("/chat", {
-        auth: { token: token },
-        transports: ['websocket', 'polling']
-    });
-
-    chatSocket.on('online_users_list', (data) => {
-        renderOnlineUsers(data.users);
-    });
-
-    chatSocket.on('new_message', (msg) => {
-        renderMessage(msg);
-        scrollToBottom();
-    });
-}
-
 function renderMessage(msg) {
     const chatBox = document.getElementById('chatMessages');
     const isOwn = window.currentUser && msg.user_id === window.currentUser.id;
 
-    // Форматирование даты: "23 Jan 2:00"
     let dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const day = dateObj.getDate();
     const month = dateObj.toLocaleString('en-US', { month: 'short' });
@@ -173,12 +202,10 @@ function renderMessage(msg) {
 
     if (!textContent && !imgHtml) return;
 
-    // Структура заголовка в зависимости от авторства
     let headerHtml = isOwn
         ? `<span class="msg-time">${timeStr}</span><span class="msg-name" id="${authorSpanId}">Loading...</span>`
         : `<span class="msg-name" id="${authorSpanId}">Loading...</span><span class="msg-time">${timeStr}</span>`;
 
-    // Структура тела с кликабельными аватарами
     let bodyHtml = `
         ${!isOwn ? `<img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">` : ''}
         <div class="msg-text">
@@ -195,7 +222,6 @@ function renderMessage(msg) {
 
     chatBox.appendChild(msgDiv);
 
-    // Подтягиваем данные профиля
     fetchProfile(msg.user_id).then(profile => {
         const nameEl = document.getElementById(authorSpanId);
         const avatarEl = document.getElementById(avatarImgId);
@@ -242,6 +268,11 @@ function renderOnlineUsers(users) {
     });
 }
 
+
+// ==========================================
+// ЛОГИКА ИНТЕРФЕЙСА (Ввод, картинки)
+// ==========================================
+
 function setupChatUIEvents() {
     const sendBtn = document.getElementById('btnSendMsg');
     const input = document.getElementById('chatInput');
@@ -268,7 +299,7 @@ function setupChatUIEvents() {
                     return;
                 }
                 if (fileNameDisplay) {
-                    fileNameDisplay.textContent = selectedImageFile.name; // Показываем название как на макете
+                    fileNameDisplay.textContent = selectedImageFile.name;
                 }
                 input.focus();
             }
@@ -293,7 +324,6 @@ async function sendMessage() {
     let imageKey = null;
 
     if (selectedImageFile) {
-        // Заглушка для S3, пока он не подключен
         console.warn("S3 upload is currently disabled. Sending fake image key.");
         // imageKey = "fake_chat_image.png";
     }
@@ -306,15 +336,45 @@ async function sendMessage() {
             temp_id: crypto.randomUUID()
         }, (response) => {
             if (response && response.status === "error") {
-                alert(response.message || "Ошибка при отправке сообщения");
+                showNotification(response.message || "Ошибка при отправке сообщения", true);
             } else {
                 input.value = '';
                 clearImageSelection();
             }
         });
     } else {
-        alert("Нет подключения к чату.");
+        showNotification("Нет подключения к чату.", true);
     }
+}
+
+
+// ==========================================
+// УТИЛИТЫ
+// ==========================================
+
+window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        showNotification("Адрес скопирован!", false);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+    });
+};
+
+function showNotification(message, isError = false) {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    Object.assign(toast.style, {
+        position: 'fixed', bottom: '20px', right: '20px', padding: '12px 20px',
+        background: isError ? '#e74c3c' : '#2ecc71', color: 'white',
+        borderRadius: '4px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+        zIndex: '10000', transition: 'opacity 0.3s ease-in-out',
+        fontWeight: 'bold', fontSize: '14px'
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
 }
 
 function escapeHtml(unsafe) {

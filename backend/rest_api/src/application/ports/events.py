@@ -51,3 +51,7 @@ class EventPublisher(Protocol):
     ) -> None:
         """Publish an event when an order is created."""
         ...
+
+    async def publish_profile_updated(self, user_id: str) -> None:
+        """Publish an event indicating that a user's profile was updated."""
+        ...

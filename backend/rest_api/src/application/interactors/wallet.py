@@ -85,6 +85,8 @@ class CreateWalletInteractor:
         w_count = await self.stats_gateway.get_wallets_count(user_id)
         await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
 
+        await self.event_publisher.publish_profile_updated(str(user_id))
+
         return WalletResponse(
             id=wallet.id,
             user_id=wallet.user_id,
@@ -157,6 +159,8 @@ class ImportWalletInteractor:
 
         w_count = await self.stats_gateway.get_wallets_count(user_id)
         await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
+
+        await self.event_publisher.publish_profile_updated(str(user_id))
 
         return WalletResponse(
             id=wallet.id,
@@ -273,6 +277,7 @@ class DeleteWalletInteractor:
 
         w_count = await self.stats_gateway.get_wallets_count(user_id)
         await self.event_publisher.publish_stats_updated(user_id, wallets_count=w_count)
+        await self.event_publisher.publish_profile_updated(str(user_id))
 
 
 class SyncAllWalletsBalanceInteractor:

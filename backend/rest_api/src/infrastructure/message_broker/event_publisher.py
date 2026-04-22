@@ -8,6 +8,7 @@ from faststream.rabbit import RabbitExchange
 
 from src.application.ports.events import EventPublisher
 from src.infrastructure.message_broker.broker import broker
+from src.presentation.amqp.consumers.chat import chat_exchange
 
 logger = logging.getLogger(__name__)
 user_exchange = RabbitExchange("user_events", type=ExchangeType.TOPIC, durable=True)
@@ -118,4 +119,12 @@ class EventPublisherImpl(EventPublisher):
         logger.info("Publishing event: ibay.order_created for %s", order_id)
         await broker.publish(
             payload, exchange=ibay_exchange, routing_key="ibay.order_created"
+        )
+
+    async def publish_profile_updated(self, user_id: str) -> None:
+        """Publish an event when a user's profile (e.g. wallets) is updated."""
+        payload = {"user_id": str(user_id)}
+        logger.info("Publishing profile update for user: %s", user_id)
+        await broker.publish(
+            payload, exchange=chat_exchange, routing_key="chat.profile_updated"
         )

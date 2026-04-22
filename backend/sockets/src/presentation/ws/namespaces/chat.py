@@ -131,3 +131,25 @@ class ChatNamespace(socketio.AsyncNamespace):
             )
 
         return {"status": "processing"}
+
+    async def on_get_user_profile(self, sid: str, data: dict):
+        """Fetch user profile via internal API and return to client via WebSocket."""
+        target_user_id = data.get("target_user_id")
+        session = await self.get_session(sid)
+        token = session.get("token")
+
+        if not target_user_id or not token:
+            return {"status": "error", "message": "Missing parameters"}
+
+        try:
+            async with self.container() as request_container:
+                api_client = await request_container.get(CryptoApiClient)
+                profile_data = await api_client.get_user_profile(target_user_id, token)
+
+                if profile_data is not None:
+                    return {"status": "success", "data": profile_data}
+
+                return {"status": "error", "message": "Profile not found"}
+        except Exception:
+            logger.exception("Error fetching profile via WS for %s", target_user_id)
+            return {"status": "error", "message": "Internal server error"}

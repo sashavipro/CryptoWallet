@@ -122,11 +122,10 @@ async def change_password(
     ),
     summary="Get Public Profile",
 )
-@cache(expire=60)
+@cache(expire=3)
 @inject
 async def get_other_user_profile(
     target_user_id: uuid.UUID,
-    user_id: CurrentUserId,
     interactor: FromDishka[GetOtherProfileInteractor],
 ) -> PublicProfileResponse:
     """Get the public profile of another user."""
