@@ -4,8 +4,6 @@ import logging
 
 from dishka.integrations.faststream import FromDishka
 from dishka.integrations.faststream import inject
-from faststream.rabbit import ExchangeType
-from faststream.rabbit import RabbitExchange
 from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
@@ -15,12 +13,11 @@ from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways.chat import ChatMessageGateway
 from src.domain.entities.chat import ChatMessage
 from src.infrastructure.message_broker.broker import broker
+from src.infrastructure.message_broker.event_publisher import chat_exchange
 
 logger = logging.getLogger(__name__)
 
 router = RabbitRouter()
-
-chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC)
 
 
 @router.subscriber(

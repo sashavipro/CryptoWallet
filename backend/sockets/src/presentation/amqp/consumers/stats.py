@@ -2,16 +2,14 @@
 
 import logging
 
-from faststream.rabbit import ExchangeType
-from faststream.rabbit import RabbitExchange
 from faststream.rabbit import RabbitQueue
 from faststream.rabbit import RabbitRouter
 
+from src.infrastructure.message_broker.event_publisher import stats_exchange
 from src.presentation.ws.server import sio
 
 logger = logging.getLogger(__name__)
 router = RabbitRouter()
-stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC, durable=True)
 
 
 @router.subscriber(

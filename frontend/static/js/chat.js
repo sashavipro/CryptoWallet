@@ -1,118 +1,126 @@
 let chatSocket = null;
 let selectedImageFile = null;
 
-// Кэш для хранения Promise (защита от Race Condition при запросе профилей)
 const profileCache = {};
-
-// Текущий открытый профиль в модалке
 let currentOpenProfileId = null;
 
 document.addEventListener('UserDataLoaded', initChatPage);
 if (window.currentUser) { initChatPage(); }
 
 async function initChatPage() {
-    initChatSocket(); // Инициализируем сокет ПЕРЕД загрузкой истории
+    // 1. Проверяем доступ к чату (защита от спама 60 сек)
+    if (window.currentUser && window.currentUser.has_chat_access === false) {
+        const chatBox = document.getElementById('chatMessages');
+        if (chatBox) {
+            chatBox.innerHTML = `
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center;">
+                    <svg style="width: 50px; height: 50px; margin-bottom: 15px; fill: #ccc;" viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+                    <h3>Чат временно недоступен</h3>
+                    <p>В целях защиты от спама, доступ к чату открывается через 1 минуту после регистрации.</p>
+                    <p>Пожалуйста, подождите немного и обновите страницу.</p>
+                </div>
+            `;
+        }
+
+        // Блокируем инпуты и кнопки
+        document.getElementById('chatInput').disabled = true;
+        document.getElementById('btnSendMsg').disabled = true;
+        document.getElementById('chatImageInput').disabled = true;
+        document.getElementById('btnAttach').disabled = true;
+
+        // Прерываем выполнение, НЕ пытаемся подключить вебсокет
+        return;
+    }
+
+    // 2. Если доступ есть — штатно запускаем чат
+    initChatSocket();
     await loadChatHistory();
     setupChatUIEvents();
 }
 
 // ==========================================
+// БЕЗОПАСНОЕ ИЗВЛЕЧЕНИЕ ТОКЕНА
+// ==========================================
+function getToken() {
+    let token = null;
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; access_token=`);
+
+    if (parts.length === 2) {
+        token = parts.pop().split(';').shift();
+    }
+
+    if (!token) {
+        token = localStorage.getItem('access_token');
+    }
+
+    if (token) {
+        token = decodeURIComponent(token);
+        // Мощная очистка: вырезаем слово Bearer/bearer в ЛЮБОМ регистре
+        token = token.replace(/^bearer\s+/i, '').trim();
+    }
+    return token;
+}
+
+
+// ==========================================
 // ЛОГИКА ПРОФИЛЕЙ И МОДАЛКИ
 // ==========================================
-
-// Умная функция получения профиля через WEBSOCKETS с принудительным обновлением
 function fetchProfile(userId, forceRefresh = false) {
     if (!forceRefresh && profileCache[userId]) {
         return profileCache[userId];
     }
 
-    const fetchPromise = new Promise((resolve) => {
-        if (!chatSocket || !chatSocket.connected) {
-            resolve({
-                username: `User_${userId.substring(0,4)}`,
-                avatar: "/static/img/default-avatar.png",
-                wallets:[],
-                has_chat_access: false
+    const fetchPromise = (async () => {
+        try {
+            const token = getToken();
+            const res = await fetch(`/api/v1/profile/${userId}`, {
+                headers: { 'Authorization': `Bearer ${token}` } // Теперь тут чистый токен!
             });
-            return;
-        }
-
-        // Запрашиваем профиль через WebSocket
-        chatSocket.emit("get_user_profile", { target_user_id: userId }, (response) => {
-            if (response && response.status === "success") {
-                resolve({
-                    username: response.data.username,
-                    avatar: response.data.avatar_url || "/static/img/default-avatar.png",
-                    has_chat_access: response.data.has_chat_access,
-                    wallets: response.data.wallets ||[]
-                });
-            } else {
-                resolve({
-                    username: `User_${userId.substring(0,4)}`,
-                    avatar: "/static/img/default-avatar.png",
-                    wallets:[],
-                    has_chat_access: false
-                });
+            if (res.ok) {
+                const data = await res.json();
+                return {
+                    username: data.username,
+                    email: data.email || "Не указана",
+                    total_messages: data.total_messages || 0,
+                    avatar: data.avatar_url || "/static/img/default-avatar.png"
+                };
             }
-        });
-    });
+        } catch (e) {
+            console.warn("Не удалось подгрузить профиль", userId);
+        }
+        return {
+            username: `User_${userId.substring(0,4)}`,
+            email: "Unknown",
+            total_messages: 0,
+            avatar: "/static/img/default-avatar.png"
+        };
+    })();
 
     profileCache[userId] = fetchPromise;
     return fetchPromise;
 }
 
-// Отрисовка данных внутри модалки
 async function updateProfileModalUI(userId) {
     try {
-        const profile = await fetchProfile(userId, true); // true = принудительно свежие данные
+        const profile = await fetchProfile(userId, true);
 
         document.getElementById('profileModalAvatar').src = profile.avatar;
         document.getElementById('profileModalUsername').textContent = profile.username;
+        document.getElementById('profileModalEmail').textContent = profile.email;
+        document.getElementById('profileModalMessagesCount').textContent = profile.total_messages;
 
-        const accessEl = document.getElementById('profileModalChatAccess');
-        if (accessEl) {
-            if (profile.has_chat_access) {
-                accessEl.textContent = "Доступ к чату: Разрешён";
-                accessEl.style.color = "#28a745";
-            } else {
-                accessEl.textContent = "Доступ к чату: Запрещён";
-                accessEl.style.color = "#e74c3c";
-            }
-        }
-
-        const walletsList = document.getElementById('profileWalletsList');
-        if (walletsList) {
-            walletsList.innerHTML = '';
-
-            if (profile.wallets && profile.wallets.length > 0) {
-                profile.wallets.forEach(address => {
-                    const li = document.createElement('li');
-                    li.className = 'wallet-item';
-                    li.innerHTML = `
-                        <span class="wallet-address" title="${address}">${address.substring(0, 6)}...${address.slice(-4)}</span>
-                        <button class="btn-copy" onclick="copyToClipboard('${address}')" title="Скопировать">
-                            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
-                        </button>
-                    `;
-                    walletsList.appendChild(li);
-                });
-            } else {
-                walletsList.innerHTML = '<li style="font-size: 13px; color: #888; text-align: center; padding: 10px;">У пользователя нет кошельков</li>';
-            }
-        }
     } catch (e) {
         console.error("Ошибка обновления UI профиля", e);
     }
 }
 
-// Открытие модалки профиля по клику на пользователя
 window.showUserProfile = async function(userId) {
     currentOpenProfileId = userId;
     document.getElementById('modalUserProfile').classList.remove('hidden');
     await updateProfileModalUI(userId);
 };
 
-// Закрытие модалки
 window.closeUserProfileModal = function() {
     document.getElementById('modalUserProfile').classList.add('hidden');
     currentOpenProfileId = null;
@@ -124,12 +132,27 @@ window.closeUserProfileModal = function() {
 // ==========================================
 
 function initChatSocket() {
-    const token = getCookie('access_token');
-    if (!token) return;
+    const token = getToken();
+    if (!token) {
+        showNotification("Ошибка авторизации. Не найден токен.", true);
+        return;
+    }
 
     chatSocket = io("/chat", {
-        auth: { token: token },
+        auth: { token: token }, // Передаем ИДЕАЛЬНО ЧИСТЫЙ токен
         transports: ['websocket', 'polling']
+    });
+
+    chatSocket.on('connect', () => {
+        console.log("WS подключен успешно");
+        // Зеленое уведомление, что мы в сети
+        showNotification("Соединение с чатом установлено!", false);
+    });
+
+    chatSocket.on('connect_error', (err) => {
+        console.error("Ошибка подключения WS:", err.message);
+        // Красное уведомление прямо на экран, если токен протух или сервер лежит
+        showNotification("Ошибка подключения к чату: " + err.message, true);
     });
 
     chatSocket.on('online_users_list', (data) => {
@@ -141,23 +164,20 @@ function initChatSocket() {
         scrollToBottom();
     });
 
-    // РЕАКТИВНОЕ ОБНОВЛЕНИЕ МОДАЛКИ (Event-Driven)
     chatSocket.on('user_profile_updated', (data) => {
-        // Если пришло событие, что профиль обновился, и мы прямо сейчас на него смотрим — обновляем модалку
         if (currentOpenProfileId === data.user_id) {
-            console.log("Получено WS событие: обновление профиля для", data.user_id);
             updateProfileModalUI(data.user_id);
         }
     });
 }
 
+
 // ==========================================
 // ИСТОРИЯ И ОТРИСОВКА СООБЩЕНИЙ
 // ==========================================
-
 async function loadChatHistory() {
     try {
-        const token = getCookie('access_token');
+        const token = getToken();
         if (!token) return;
 
         const response = await fetch('/api/v1/chat/messages?limit=50', {
@@ -202,17 +222,17 @@ function renderMessage(msg) {
 
     if (!textContent && !imgHtml) return;
 
-    let headerHtml = isOwn
-        ? `<span class="msg-time">${timeStr}</span><span class="msg-name" id="${authorSpanId}">Loading...</span>`
-        : `<span class="msg-name" id="${authorSpanId}">Loading...</span><span class="msg-time">${timeStr}</span>`;
+    let headerHtml = `
+        <span class="msg-name" id="${authorSpanId}">Loading...</span>
+        <span class="msg-time">${timeStr}</span>
+    `;
 
     let bodyHtml = `
-        ${!isOwn ? `<img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">` : ''}
+        <img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">
         <div class="msg-text">
             ${textContent ? escapeHtml(textContent) : ''}
             ${imgHtml}
         </div>
-        ${isOwn ? `<img src="/static/img/default-avatar.png" id="${avatarImgId}" class="msg-avatar" onclick="showUserProfile('${msg.user_id}')" title="Профиль">` : ''}
     `;
 
     msgDiv.innerHTML = `
@@ -272,7 +292,6 @@ function renderOnlineUsers(users) {
 // ==========================================
 // ЛОГИКА ИНТЕРФЕЙСА (Ввод, картинки)
 // ==========================================
-
 function setupChatUIEvents() {
     const sendBtn = document.getElementById('btnSendMsg');
     const input = document.getElementById('chatInput');
@@ -324,11 +343,14 @@ async function sendMessage() {
     let imageKey = null;
 
     if (selectedImageFile) {
-        console.warn("S3 upload is currently disabled. Sending fake image key.");
-        // imageKey = "fake_chat_image.png";
+        console.warn("S3 upload is currently disabled.");
     }
 
-    if (chatSocket && chatSocket.connected) {
+    if (chatSocket) {
+        if (!chatSocket.connected) {
+            showNotification("Соединение с сервером устанавливается... Отправляем.", true);
+        }
+
         chatSocket.emit("send_message", {
             room_id: "chat_global",
             text: text,
@@ -343,22 +365,18 @@ async function sendMessage() {
             }
         });
     } else {
-        showNotification("Нет подключения к чату.", true);
+        showNotification("Ошибка: чат не инициализирован.", true);
     }
 }
 
+function escapeHtml(unsafe) {
+    return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-// ==========================================
-// УТИЛИТЫ
-// ==========================================
-
-window.copyToClipboard = function(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        showNotification("Адрес скопирован!", false);
-    }).catch(err => {
-        console.error('Failed to copy: ', err);
-    });
-};
+function scrollToBottom() {
+    const chatBox = document.getElementById('chatMessages');
+    if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+}
 
 function showNotification(message, isError = false) {
     const toast = document.createElement('div');
@@ -375,20 +393,4 @@ function showNotification(message, isError = false) {
         toast.style.opacity = '0';
         setTimeout(() => toast.remove(), 300);
     }, 2500);
-}
-
-function escapeHtml(unsafe) {
-    return (unsafe || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function scrollToBottom() {
-    const chatBox = document.getElementById('chatMessages');
-    if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
-}
-
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
 }

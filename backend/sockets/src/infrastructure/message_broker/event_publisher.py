@@ -9,7 +9,11 @@ from src.application.ports.publishers import EventPublisher
 from src.infrastructure.message_broker.broker import broker
 
 logger = logging.getLogger(__name__)
-chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC)
+
+chat_exchange = RabbitExchange("chat_events", type=ExchangeType.TOPIC, durable=True)
+ibay_exchange = RabbitExchange("ibay_events", type=ExchangeType.TOPIC, durable=True)
+stats_exchange = RabbitExchange("stats_events", type=ExchangeType.TOPIC, durable=True)
+ws_exchange = RabbitExchange("ws_events", type=ExchangeType.TOPIC, durable=True)
 
 
 class EventPublisherImpl(EventPublisher):

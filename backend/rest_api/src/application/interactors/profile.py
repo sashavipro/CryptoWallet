@@ -8,9 +8,9 @@ from src.application.dtos.request import ChangePasswordRequest
 from src.application.dtos.request import UpdateUserRequest
 from src.application.dtos.response import PublicProfileResponse
 from src.application.dtos.response import UserResponse
+from src.application.ports.gateways import StatsGateway
 from src.application.ports.gateways import UnitOfWork
 from src.application.ports.gateways import UserGateway
-from src.application.ports.gateways import WalletGateway
 from src.application.ports.providers import FileUploader
 from src.application.ports.utils import IdGenerator
 from src.application.ports.utils import PasswordHasher
@@ -54,12 +54,10 @@ class GetUserInteractor:
 class GetOtherProfileInteractor:
     """Use Case for retrieving another user's public profile."""
 
-    def __init__(
-        self, user_gateway: UserGateway, wallet_gateway: WalletGateway
-    ) -> None:
-        """Initialize the interactor with user and wallet gateways."""
+    def __init__(self, user_gateway: UserGateway, stats_gateway: StatsGateway) -> None:
+        """Initialize the interactor with user and stats gateways."""
         self.user_gateway = user_gateway
-        self.wallet_gateway = wallet_gateway
+        self.stats_gateway = stats_gateway
 
     async def __call__(self, user_id: uuid.UUID) -> PublicProfileResponse:
         """Execute the retrieval of another user's public profile."""
@@ -67,8 +65,7 @@ class GetOtherProfileInteractor:
         if not user:
             raise UserNotFoundException("User not found")  # noqa: TRY003, EM101
 
-        wallets = await self.wallet_gateway.get_wallets_by_user_id(user_id)
-        wallet_addresses = [w.address for w in wallets]
+        total_messages = await self.stats_gateway.get_total_messages(user_id)
 
         now = datetime.now(UTC)
         time_since_registration = (now - user.created_at).total_seconds()
@@ -77,9 +74,10 @@ class GetOtherProfileInteractor:
         return PublicProfileResponse(
             id=user.id,
             username=user.username,
+            email=user.email,
+            total_messages=total_messages,
             avatar_url=user.avatar_url,
             has_chat_access=has_chat_access,
-            wallets=wallet_addresses,
         )
 
 

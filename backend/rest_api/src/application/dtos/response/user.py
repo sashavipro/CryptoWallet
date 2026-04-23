@@ -1,8 +1,7 @@
-"""rest_api/src/application/dtos/responses/user.py."""
+"""rest_api/src/application/dtos/response/user.py."""
 
 import uuid
 from dataclasses import dataclass
-from dataclasses import field
 from datetime import datetime
 
 
@@ -25,9 +24,10 @@ class PublicProfileResponse:
 
     id: uuid.UUID
     username: str
+    email: str
+    total_messages: int
     avatar_url: str | None = None
     has_chat_access: bool = True
-    wallets: list[str] = field(default_factory=list)
 
 
 @dataclass

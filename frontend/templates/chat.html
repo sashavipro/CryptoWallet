@@ -57,7 +57,7 @@
     .online-avatar {
         width: 40px;
         height: 40px;
-        border-radius: 4px; /* Квадратные аватарки как на макете */
+        border-radius: 4px;
         object-fit: cover;
         margin-right: 15px;
         background-color: #555;
@@ -90,17 +90,22 @@
         flex-direction: column;
         margin-bottom: 20px;
         width: 100%;
+        align-items: flex-start; /* Чужие сообщения прижаты влево */
+    }
+
+    .message.own {
+        align-items: flex-end; /* Свои сообщения прижаты вправо */
     }
 
     .message-header {
         display: flex;
-        justify-content: space-between;
+        gap: 10px;
         align-items: flex-end;
         margin-bottom: 5px;
     }
 
     .message.own .message-header {
-        flex-direction: row-reverse;
+        flex-direction: row-reverse; /* Имя справа, время слева */
     }
 
     .msg-name {
@@ -117,11 +122,11 @@
     .message-body {
         display: flex;
         gap: 10px;
-        width: 100%;
+        max-width: 80%; /* Ограничиваем ширину пузыря, чтобы он не был на весь экран */
     }
 
     .message.own .message-body {
-        flex-direction: row-reverse;
+        flex-direction: row-reverse; /* Аватар справа, текст слева */
     }
 
     .msg-avatar {
@@ -132,22 +137,21 @@
         background-color: #555;
         cursor: pointer;
         border: 1px solid #ccc;
+        flex-shrink: 0;
     }
 
     .msg-text {
-        flex: 1;
-        background: #e6e6e6; /* Серый фон для чужих */
+        background: #e6e6e6;
         border: 1px solid #999;
         padding: 10px 15px;
-        border-radius: 2px;
+        border-radius: 4px;
         color: #000;
         font-size: 15px;
         word-wrap: break-word;
-        min-height: 40px;
     }
 
     .message.own .msg-text {
-        background: #81d4fa; /* Голубой фон для своих */
+        background: #81d4fa;
         border-color: #5bc0de;
     }
 
@@ -157,6 +161,7 @@
         object-fit: cover;
         margin-top: 10px;
         display: block;
+        border-radius: 4px;
     }
 
     /* --- Зона ввода --- */
@@ -214,41 +219,6 @@
 
     .hidden-file-input { display: none; }
 
-    /* Стили для кошельков в модалке */
-    .wallet-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: #f8f9fa;
-        padding: 8px 10px;
-        margin-bottom: 8px;
-        border-radius: 4px;
-        border: 1px solid #eee;
-    }
-    .wallet-address {
-        font-family: monospace;
-        font-size: 13px;
-        color: #3498db;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 220px;
-    }
-    .btn-copy {
-        background: none;
-        border: none;
-        cursor: pointer;
-        color: #555;
-        padding: 4px;
-        border-radius: 4px;
-        transition: background 0.2s;
-    }
-    .btn-copy:hover {
-        background: #e2e6ea;
-        color: #000;
-    }
-    .btn-copy svg { width: 16px; height: 16px; fill: currentColor; }
-
     /* --- Модальное окно профиля --- */
     .hidden { display: none !important; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
@@ -291,15 +261,15 @@
 <!-- Модалка просмотра профиля -->
 <div id="modalUserProfile" class="modal-overlay hidden">
     <div class="modal-content">
-        <span class="close-modal" onclick="document.getElementById('modalUserProfile').classList.add('hidden')">&times;</span>
-        <img id="profileModalAvatar" src="" style="width: 120px; height: 120px; border-radius: 4px; object-fit: cover; margin-bottom: 15px; border: 1px solid #ccc;">
-        <h2 id="profileModalUsername" style="margin: 0 0 10px 0;">Username</h2>
+        <span class="close-modal" onclick="closeUserProfileModal()">&times;</span>
 
-        <div id="profileModalWallets" style="margin-top: 15px; text-align: left;">
-            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #555;">Кошельки пользователя:</h4>
-            <ul id="profileWalletsList" style="list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto;">
-                <!-- Сюда вставляем кошельки через JS -->
-            </ul>
+        <img id="profileModalAvatar" src="" style="width: 120px; height: 120px; border-radius: 4px; object-fit: cover; margin-bottom: 10px; border: 1px solid #ccc;">
+        <h2 id="profileModalUsername" style="margin: 0 0 5px 0; color: #333;">Username</h2>
+        <p id="profileModalEmail" style="margin: 0 0 20px 0; color: #666; font-size: 14px;">email@example.com</p>
+
+        <div style="background: #f8f9fa; padding: 12px 15px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #eee;">
+            <span style="font-size: 14px; color: #555; font-weight: bold;">Сообщений в чате:</span>
+            <span id="profileModalMessagesCount" style="font-size: 18px; color: #3498db; font-weight: bold;">0</span>
         </div>
     </div>
 </div>

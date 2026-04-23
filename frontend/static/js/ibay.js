@@ -17,10 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initIbay() {
     await fetchWallets();
 
-    // ИСПРАВЛЕНИЕ №1: Сначала ДОЖИДАЕМСЯ загрузки товаров, чтобы productsMap заполнился
     await fetchProducts();
 
-    // Только после этого загружаем заказы, теперь у них будут названия товаров
     fetchOrders();
 
     initWebSockets();
@@ -30,13 +28,19 @@ async function initIbay() {
         document.getElementById('modalCreateProduct').classList.remove('hidden');
     });
 
+    // Слушатель для изменения названия файла в модалке (муляж загрузки)
+    document.getElementById('prodPhotoInput').addEventListener('change', function(e) {
+        const fileName = e.target.files.length > 0 ? e.target.files[0].name : "Файл не выбран";
+        document.getElementById('prodPhotoName').textContent = fileName;
+    });
+
     document.getElementById('formCreateProduct').addEventListener('submit', handleCreateProduct);
     document.getElementById('formBuyProduct').addEventListener('submit', handleBuyProduct);
 }
 
 
 // ==========================================
-// ФУНКЦИИ API И РЕНДЕРА (Новый дизайн)
+// ФУНКЦИИ API И РЕНДЕРА
 // ==========================================
 
 async function fetchProducts() {
@@ -62,6 +66,9 @@ async function fetchProducts() {
             const safeTitle = escapeHTML(p.title);
             const safeAddress = escapeHTML(p.seller_address || '0x...');
 
+            // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
+            const displayPrice = parseFloat(p.price_eth).toString();
+
             const card = document.createElement('div');
             card.className = 'item-card-horizontal';
             card.innerHTML = `
@@ -77,7 +84,7 @@ async function fetchProducts() {
                     </div>
                     <div class="item-row">
                         <span class="item-label">Price:</span>
-                        <span class="item-value" style="font-size: 16px; color: #28a745; font-weight: bold;">${p.price_eth} ETH</span>
+                        <span class="item-value" style="font-size: 16px; color: #28a745; font-weight: bold;">${displayPrice} ETH</span>
                     </div>
                     <button class="btn btn-buy" onclick="openBuyModal('${p.id}')">Buy</button>
                 </div>
@@ -107,18 +114,18 @@ async function fetchOrders() {
         orders.forEach(o => {
             const safeTx = escapeHTML(o.tx_hash);
             const safeStatus = escapeHTML(o.status);
-
-            // ИСПРАВЛЕНИЕ №2: Поле в DTO называется return_tx_hash, а не refund_tx_hash
             const safeRefundTx = o.return_tx_hash ? escapeHTML(o.return_tx_hash) : '';
 
             // Форматируем дату
             const d = o.created_at ? new Date(o.created_at) : new Date();
             const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'}) + ' ' + d.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
 
-            // Достаем картинку и название из кэша продуктов
             const product = productsMap[o.product_id];
             const imgUrl = product && product.photo_url ? product.photo_url : '/static/img/default-product.png';
             const title = product ? product.title : `Товар #${o.id.substring(0,6)}`;
+
+            // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
+            const displayPrice = parseFloat(o.price_eth).toString();
 
             // Маппинг статусов
             let displayStatus = safeStatus;
@@ -144,7 +151,7 @@ async function fetchOrders() {
                     </div>
                     <div class="item-row">
                         <span class="item-label">Цена:</span>
-                        <span class="item-value" style="font-weight: bold;">${o.price_eth} ETH</span>
+                        <span class="item-value" style="font-weight: bold;">${displayPrice} ETH</span>
                     </div>
                     <div class="item-row">
                         <span class="item-label">Время заказа:</span>
@@ -203,8 +210,14 @@ async function handleCreateProduct(e) {
     e.preventDefault();
     const title = document.getElementById('prodTitle').value;
     const price = document.getElementById('prodPrice').value;
-    const photoUrl = document.getElementById('prodPhotoUrl').value;
     const walletId = document.getElementById('prodWalletSelect').value;
+
+    // Муляжная проверка файла
+    const photoInput = document.getElementById('prodPhotoInput');
+    let photoUrl = null;
+    if (photoInput.files.length > 0) {
+        console.warn("S3 upload is currently disabled. Sending null for photo_url.");
+    }
 
     try {
         const res = await fetch('/api/v1/ibay/products', {
@@ -216,8 +229,8 @@ async function handleCreateProduct(e) {
             body: JSON.stringify({
                 title: title,
                 price_eth: parseFloat(price),
-                photo_url: photoUrl || null,
-                wallet_id: walletId // ИСПРАВЛЕНИЕ: бэкенд ждет wallet_id
+                photo_url: photoUrl,
+                wallet_id: walletId
             })
         });
 
@@ -225,6 +238,7 @@ async function handleCreateProduct(e) {
             showNotification('Товар успешно опубликован!');
             closeModal('modalCreateProduct');
             document.getElementById('formCreateProduct').reset();
+            document.getElementById('prodPhotoName').textContent = 'Файл не выбран'; // Сбрасываем текст
             fetchProducts();
         } else {
             const err = await res.json();
@@ -253,7 +267,6 @@ async function handleBuyProduct(e) {
     try {
         showNotification('Отправка транзакции в сеть...', false);
 
-        // ИСПРАВЛЕНИЕ №3: Вернул двухшаговую покупку (Сначала транзакция, потом заказ)
         const txRes = await fetch('/api/v1/transactions', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getCookie('access_token')}` },
@@ -327,9 +340,12 @@ function openBuyModal(productId) {
     const product = productsMap[productId];
     if (!product) return;
 
+    // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
+    const displayPrice = parseFloat(product.price_eth).toString();
+
     document.getElementById('buyProductId').value = productId;
     document.getElementById('buyTitle').textContent = product.title;
-    document.getElementById('buyPrice').textContent = `${product.price_eth} ETH`;
+    document.getElementById('buyPrice').textContent = `${displayPrice} ETH`;
 
     populateWalletSelect('buyWalletSelect');
     document.getElementById('modalBuyProduct').classList.remove('hidden');
@@ -368,6 +384,17 @@ function showNotification(message, isError = false) {
 function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
+
+    // Используем очистку токена как в чате (убираем Bearer, если он случайно сохранился)
+    let token = null;
+    if (parts.length === 2) {
+        token = parts.pop().split(';').shift();
+    }
+    if (!token) {
+        token = localStorage.getItem('access_token');
+    }
+    if (token) {
+        token = decodeURIComponent(token).replace(/^bearer\s+/i, '').trim();
+    }
+    return token;
 }
