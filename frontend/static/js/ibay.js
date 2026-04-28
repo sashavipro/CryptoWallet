@@ -2,6 +2,7 @@
 let userWallets =[];
 let socket = null;
 let productsMap = {}; // Кэш товаров для быстрого доступа при покупке
+let selectedProductImage = null; // Храним выбранный файл картинки
 
 // ==========================================
 // ТОЧКА ВХОДА (ИНИЦИАЛИЗАЦИЯ)
@@ -16,11 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function initIbay() {
     await fetchWallets();
-
     await fetchProducts();
-
     fetchOrders();
-
     initWebSockets();
 
     document.getElementById('btnOpenCreateModal').addEventListener('click', () => {
@@ -28,10 +26,15 @@ async function initIbay() {
         document.getElementById('modalCreateProduct').classList.remove('hidden');
     });
 
-    // Слушатель для изменения названия файла в модалке (муляж загрузки)
+    // Слушатель для выбора файла картинки
     document.getElementById('prodPhotoInput').addEventListener('change', function(e) {
-        const fileName = e.target.files.length > 0 ? e.target.files[0].name : "Файл не выбран";
-        document.getElementById('prodPhotoName').textContent = fileName;
+        if (e.target.files.length > 0) {
+            selectedProductImage = e.target.files[0];
+            document.getElementById('prodPhotoName').textContent = selectedProductImage.name;
+        } else {
+            selectedProductImage = null;
+            document.getElementById('prodPhotoName').textContent = "Файл не выбран";
+        }
     });
 
     document.getElementById('formCreateProduct').addEventListener('submit', handleCreateProduct);
@@ -52,7 +55,7 @@ async function fetchProducts() {
 
         const container = document.getElementById('productsView');
         container.innerHTML = '';
-        productsMap = {}; // Очищаем кэш
+        productsMap = {};
 
         if (products.length === 0) {
             container.innerHTML = '<p style="padding: 10px;">Товаров пока нет.</p>';
@@ -60,13 +63,11 @@ async function fetchProducts() {
         }
 
         products.forEach(p => {
-            productsMap[p.id] = p; // Сохраняем товар
+            productsMap[p.id] = p;
 
             const imgUrl = p.photo_url || '/static/img/default-product.png';
             const safeTitle = escapeHTML(p.title);
             const safeAddress = escapeHTML(p.seller_address || '0x...');
-
-            // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
             const displayPrice = parseFloat(p.price_eth).toString();
 
             const card = document.createElement('div');
@@ -116,18 +117,14 @@ async function fetchOrders() {
             const safeStatus = escapeHTML(o.status);
             const safeRefundTx = o.return_tx_hash ? escapeHTML(o.return_tx_hash) : '';
 
-            // Форматируем дату
             const d = o.created_at ? new Date(o.created_at) : new Date();
             const dateStr = d.toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit', year: 'numeric'}) + ' ' + d.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'});
 
             const product = productsMap[o.product_id];
             const imgUrl = product && product.photo_url ? product.photo_url : '/static/img/default-product.png';
             const title = product ? product.title : `Товар #${o.id.substring(0,6)}`;
-
-            // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
             const displayPrice = parseFloat(o.price_eth).toString();
 
-            // Маппинг статусов
             let displayStatus = safeStatus;
             let statusClass = safeStatus.toLowerCase();
             if (safeStatus === 'NEW' || safeStatus === 'PENDING') { displayStatus = 'Новый'; statusClass = 'new'; }
@@ -179,7 +176,7 @@ async function fetchOrders() {
 
 
 // ==========================================
-// ОБРАБОТЧИКИ ФОРМ (БИЗНЕС-ЛОГИКА)
+// ОБРАБОТЧИКИ ФОРМ (БИЗНЕС-ЛОГИКА S3)
 // ==========================================
 
 async function fetchWallets() {
@@ -208,18 +205,49 @@ function populateWalletSelect(selectId) {
 
 async function handleCreateProduct(e) {
     e.preventDefault();
+    const btnSubmit = e.target.querySelector('button[type="submit"]');
+    btnSubmit.disabled = true;
+
     const title = document.getElementById('prodTitle').value;
     const price = document.getElementById('prodPrice').value;
     const walletId = document.getElementById('prodWalletSelect').value;
 
-    // Муляжная проверка файла
-    const photoInput = document.getElementById('prodPhotoInput');
-    let photoUrl = null;
-    if (photoInput.files.length > 0) {
-        console.warn("S3 upload is currently disabled. Sending null for photo_url.");
-    }
+    let finalPhotoUrl = null;
 
     try {
+        // --- ЛОГИКА ЗАГРУЗКИ В S3 ---
+        if (selectedProductImage) {
+            showNotification('Загрузка картинки в облако...', false);
+
+            const extension = selectedProductImage.name.split('.').pop();
+            const contentType = selectedProductImage.type;
+
+            // 1. Получаем ссылку для загрузки (Presigned URL)
+            const presignedRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${encodeURIComponent(contentType)}`, {
+                headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
+            });
+
+            if (!presignedRes.ok) throw new Error("Не удалось получить ссылку для загрузки фото");
+            const uploadData = await presignedRes.json();
+
+            // 2. Отправляем файл напрямую в DigitalOcean Spaces
+            const uploadRes = await fetch(uploadData.upload_url, {
+                method: 'PUT',
+                body: selectedProductImage,
+                headers: {
+                    'Content-Type': contentType,
+                    'x-amz-acl': 'public-read' // Делаем файл публичным
+                }
+            });
+
+            if (!uploadRes.ok) throw new Error("Ошибка при загрузке картинки в хранилище DO Spaces");
+
+            // 3. Сохраняем публичный URL CDN
+            finalPhotoUrl = uploadData.public_url;
+        }
+
+        // --- СОЗДАНИЕ ТОВАРА В БАЗЕ ---
+        showNotification('Создание товара...', false);
         const res = await fetch('/api/v1/ibay/products', {
             method: 'POST',
             headers: {
@@ -229,7 +257,7 @@ async function handleCreateProduct(e) {
             body: JSON.stringify({
                 title: title,
                 price_eth: parseFloat(price),
-                photo_url: photoUrl,
+                photo_url: finalPhotoUrl, // Передаем URL из S3
                 wallet_id: walletId
             })
         });
@@ -238,14 +266,20 @@ async function handleCreateProduct(e) {
             showNotification('Товар успешно опубликован!');
             closeModal('modalCreateProduct');
             document.getElementById('formCreateProduct').reset();
-            document.getElementById('prodPhotoName').textContent = 'Файл не выбран'; // Сбрасываем текст
+
+            // Сброс файла
+            selectedProductImage = null;
+            document.getElementById('prodPhotoName').textContent = 'Файл не выбран';
+
             fetchProducts();
         } else {
             const err = await res.json();
-            showNotification(err.detail || 'Ошибка публикации', true);
+            throw new Error(err.detail || 'Ошибка публикации');
         }
     } catch (e) {
-        showNotification('Сетевая ошибка', true);
+        showNotification(e.message || 'Сетевая ошибка', true);
+    } finally {
+        btnSubmit.disabled = false;
     }
 }
 
@@ -340,7 +374,6 @@ function openBuyModal(productId) {
     const product = productsMap[productId];
     if (!product) return;
 
-    // ИСПРАВЛЕНИЕ: Округляем цену (убираем лишние нули)
     const displayPrice = parseFloat(product.price_eth).toString();
 
     document.getElementById('buyProductId').value = productId;
@@ -352,7 +385,13 @@ function openBuyModal(productId) {
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.add('hidden');
+    document.getElementById('modalId').classList.add('hidden');
+    // Очистка при закрытии
+    if(modalId === 'modalCreateProduct') {
+        document.getElementById('formCreateProduct').reset();
+        selectedProductImage = null;
+        document.getElementById('prodPhotoName').textContent = 'Файл не выбран';
+    }
 }
 
 function escapeHTML(str) {
@@ -385,7 +424,6 @@ function getCookie(name) {
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
 
-    // Используем очистку токена как в чате (убираем Bearer, если он случайно сохранился)
     let token = null;
     if (parts.length === 2) {
         token = parts.pop().split(';').shift();
