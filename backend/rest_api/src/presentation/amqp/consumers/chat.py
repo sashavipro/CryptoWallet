@@ -36,7 +36,7 @@ async def process_chat_message(
     try:
         user_id = payload.get("user_id")
         text = payload.get("text", "")
-        image_url = payload.get("image_url")
+        image_url = payload.get("image_key") or payload.get("image_url")
 
         message = ChatMessage(
             id=None, user_id=user_id, message_text=text, image_url=image_url
