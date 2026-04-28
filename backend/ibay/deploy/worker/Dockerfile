@@ -15,4 +15,4 @@ COPY . /app/
 
 ENV PYTHONPATH=/app/backend/ibay
 
-CMD["taskiq", "worker", "src.infrastructure.task_broker:taskiq_broker", "src.application.tasks.delivery"]
+CMD ["taskiq", "worker", "src.infrastructure.task_broker:taskiq_broker", "src.application.tasks.delivery"]
