@@ -147,9 +147,10 @@ async def get_avatar_presigned_url(
     extension: str,
     content_type: str,
     interactor: FromDishka[GenerateAvatarUploadUrlInteractor],
+    file_type: str = "avatars",
 ):
     """Get a direct S3 upload link for a new avatar."""
-    return await interactor(user_id, extension, content_type)
+    return await interactor(user_id, extension, content_type, file_type)
 
 
 @router.get(

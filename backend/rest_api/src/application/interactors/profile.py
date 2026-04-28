@@ -208,10 +208,17 @@ class GenerateAvatarUploadUrlInteractor:
         self.id_generator = id_generator
 
     async def __call__(
-        self, user_id: uuid.UUID, extension: str, content_type: str
+        self,
+        user_id: uuid.UUID,
+        extension: str,
+        content_type: str,
+        file_type: str = "avatars",
     ) -> dict:
         """Execute the generation of a secure, temporary upload link."""
-        file_name = f"avatars/{user_id}/{self.id_generator.generate()}.{extension}"
+        if file_type not in ["avatars", "products", "chat"]:
+            file_type = "avatars"
+
+        file_name = f"{file_type}/{user_id}/{self.id_generator.generate()}.{extension}"
 
         return await self.file_uploader.generate_presigned_upload_url(
             file_name=file_name, content_type=content_type

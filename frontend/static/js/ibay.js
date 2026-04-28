@@ -223,7 +223,7 @@ async function handleCreateProduct(e) {
             const contentType = selectedProductImage.type;
 
             // 1. Получаем ссылку для загрузки (Presigned URL)
-            const presignedRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${encodeURIComponent(contentType)}`, {
+            const presignedRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${encodeURIComponent(contentType)}&file_type=products`, {
                 headers: { 'Authorization': `Bearer ${getCookie('access_token')}` }
             });
 
@@ -385,7 +385,7 @@ function openBuyModal(productId) {
 }
 
 function closeModal(modalId) {
-    document.getElementById('modalId').classList.add('hidden');
+    document.getElementById(modalId).classList.add('hidden');
     // Очистка при закрытии
     if(modalId === 'modalCreateProduct') {
         document.getElementById('formCreateProduct').reset();
