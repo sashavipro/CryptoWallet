@@ -177,27 +177,31 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================
-    // 2. ОБРАБОТКА АВАТАРОВ (МУЛЯЖ БЕЗ S3)
+    // 2. ОБРАБОТКА АВАТАРОВ (РЕАЛЬНАЯ ЗАГРУЗКА В S3)
     // ==========================================
     btnRemoveAvatar.addEventListener('click', async () => {
         if (!confirm('Вы уверены, что хотите удалить аватарку?')) return;
 
-        profileAvatar.src = '/static/img/default-avatar.png';
-        document.getElementById('navAvatar').src = '/static/img/default-avatar.png';
-
-        if (window.currentUser) {
-            window.currentUser.avatar_url = null;
-        }
-
-        showAlert('Аватар удален (визуально)');
-
-        // Пытаемся удалить на бэкенде (если там нет реального URL, бэкенд просто проигнорирует)
         try {
-            await fetch('/api/v1/profile/me/avatar', {
+            const res = await fetch('/api/v1/profile/me/avatar', {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${getToken()}` }
             });
-        } catch (e) {}
+
+            if (checkUnauthorized(res)) return;
+
+            if (res.ok) {
+                profileAvatar.src = '/static/img/default-avatar.png';
+                document.getElementById('navAvatar').src = '/static/img/default-avatar.png';
+                if (window.currentUser) window.currentUser.avatar_url = null;
+                showAlert('Аватар успешно удален');
+            } else {
+                showAlert('Ошибка при удалении аватара', true);
+            }
+        } catch (e) {
+            console.error(e);
+            showAlert('Ошибка сети при удалении аватара', true);
+        }
     });
 
     btnUpdateAvatar.addEventListener('click', () => {
@@ -208,25 +212,70 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Так как S3 не подключен, мы делаем визуальный муляж через FileReader
-        const reader = new FileReader();
+        try {
+            showAlert('Получение ссылки для загрузки...', false);
 
-        reader.onload = (event) => {
-            const base64Image = event.target.result;
+            const extension = file.name.split('.').pop();
+            const contentType = file.type;
 
-            // Сразу отображаем картинку
-            profileAvatar.src = base64Image;
-            document.getElementById('navAvatar').src = base64Image;
+            // 1. Получаем Presigned URL от бэкенда
+            const urlRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${encodeURIComponent(contentType)}`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` }
+            });
 
-            if (window.currentUser) {
-                window.currentUser.avatar_url = base64Image;
+            if (checkUnauthorized(urlRes)) return;
+
+            if (!urlRes.ok) {
+                showAlert('Ошибка при генерации ссылки для загрузки', true);
+                return;
             }
 
-            showAlert('Аватар успешно загружен (визуально, S3 отключен)');
-        };
+            const { upload_url, public_url } = await urlRes.json();
 
-        reader.readAsDataURL(file);
-        avatarUploadInput.value = ''; // Сбрасываем input
+            showAlert('Загрузка картинки в облако (S3)...', false);
+
+            // 2. Отправляем файл напрямую в DigitalOcean Spaces
+            const s3Res = await fetch(upload_url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': contentType,
+                    'x-amz-acl': 'public-read' // Делаем файл публичным
+                },
+                body: file
+            });
+
+            if (!s3Res.ok) {
+                showAlert('Ошибка при загрузке картинки в S3', true);
+                return;
+            }
+
+            showAlert('Сохранение ссылки в базу данных...', false);
+
+            // 3. Сохраняем публичную ссылку в базу (PATCH /me)
+            const updateRes = await fetch('/api/v1/profile/me', {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: JSON.stringify({ avatar_url: public_url })
+            });
+
+            if (updateRes.ok) {
+                profileAvatar.src = public_url;
+                document.getElementById('navAvatar').src = public_url;
+                if (window.currentUser) window.currentUser.avatar_url = public_url;
+                showAlert('Аватар успешно обновлен и сохранен!');
+            } else {
+                showAlert('Ошибка при сохранении ссылки в профиль', true);
+            }
+
+        } catch (error) {
+            console.error(error);
+            showAlert('Сетевая ошибка при обновлении аватара', true);
+        } finally {
+            avatarUploadInput.value = ''; // Сбрасываем input
+        }
     });
 
     // ==========================================
