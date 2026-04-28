@@ -28,8 +28,7 @@ async function initChatPage() {
         document.getElementById('chatImageInput').disabled = true;
         document.getElementById('btnAttach').disabled = true;
 
-        // Прерываем выполнение, НЕ пытаемся подключить вебсокет
-        return;
+        return; // Прерываем выполнение, НЕ пытаемся подключить вебсокет
     }
 
     // 2. Если доступ есть — штатно запускаем чат
@@ -56,7 +55,6 @@ function getToken() {
 
     if (token) {
         token = decodeURIComponent(token);
-        // Мощная очистка: вырезаем слово Bearer/bearer в ЛЮБОМ регистре
         token = token.replace(/^bearer\s+/i, '').trim();
     }
     return token;
@@ -75,7 +73,7 @@ function fetchProfile(userId, forceRefresh = false) {
         try {
             const token = getToken();
             const res = await fetch(`/api/v1/profile/${userId}`, {
-                headers: { 'Authorization': `Bearer ${token}` } // Теперь тут чистый токен!
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -130,7 +128,6 @@ window.closeUserProfileModal = function() {
 // ==========================================
 // ЛОГИКА WEBSOCKET СЕРВЕРА
 // ==========================================
-
 function initChatSocket() {
     const token = getToken();
     if (!token) {
@@ -139,19 +136,18 @@ function initChatSocket() {
     }
 
     chatSocket = io("/chat", {
-        auth: { token: token }, // Передаем ИДЕАЛЬНО ЧИСТЫЙ токен
-        transports: ['websocket', 'polling']
+        auth: { token: token },
+        // ИСПРАВЛЕНИЕ ПОДКЛЮЧЕНИЯ: Строго заставляем использовать WebSocket (без polling)
+        transports: ['websocket']
     });
 
     chatSocket.on('connect', () => {
         console.log("WS подключен успешно");
-        // Зеленое уведомление, что мы в сети
         showNotification("Соединение с чатом установлено!", false);
     });
 
     chatSocket.on('connect_error', (err) => {
         console.error("Ошибка подключения WS:", err.message);
-        // Красное уведомление прямо на экран, если токен протух или сервер лежит
         showNotification("Ошибка подключения к чату: " + err.message, true);
     });
 
@@ -187,6 +183,7 @@ async function loadChatHistory() {
         if (response.ok) {
             const messages = await response.json();
             document.getElementById('chatMessages').innerHTML = '';
+            // Разворачиваем массив, так как бэкенд отдает новые сообщения сверху
             messages.forEach(msg => renderMessage(msg));
             setTimeout(scrollToBottom, 100);
         }
@@ -202,7 +199,7 @@ function renderMessage(msg) {
     let dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
     const day = dateObj.getDate();
     const month = dateObj.toLocaleString('en-US', { month: 'short' });
-    const hours = dateObj.getHours();
+    const hours = dateObj.getHours().toString().padStart(2, '0');
     const minutes = dateObj.getMinutes().toString().padStart(2, '0');
     let timeStr = `${day} ${month} ${hours}:${minutes}`;
 
@@ -215,7 +212,8 @@ function renderMessage(msg) {
     const textContent = msg.text || msg.message_text || "";
 
     let imgHtml = '';
-    const imageUrl = msg.image_url || (msg.image_key ? `https://my-s3-bucket.com/${msg.image_key}` : null);
+    // msg.image_key — это URL, который возвращается из нашего S3 бакета
+    const imageUrl = msg.image_url || msg.image_key;
     if (imageUrl) {
         imgHtml = `<img src="${imageUrl}" class="message-image" alt="Attachment" onload="scrollToBottom()">`;
     }
@@ -252,7 +250,7 @@ function renderMessage(msg) {
 
 function renderOnlineUsers(users) {
     const list = document.getElementById('onlineUsersList');
-    const uniqueUsers = Array.isArray(users) ? [...new Set(users)] :[];
+    const uniqueUsers = Array.isArray(users) ?[...new Set(users)] :[];
 
     let html = '';
 
@@ -334,38 +332,84 @@ function clearImageSelection() {
     if (fileNameDisplay) fileNameDisplay.textContent = '';
 }
 
+// ==========================================
+// ИСПРАВЛЕННАЯ ОТПРАВКА И ЗАГРУЗКА КАРТИНОК
+// ==========================================
 async function sendMessage() {
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
+    const sendBtn = document.getElementById('btnSendMsg');
 
     if (!text && !selectedImageFile) return;
 
-    let imageKey = null;
+    let finalPhotoUrl = null;
 
-    if (selectedImageFile) {
-        console.warn("S3 upload is currently disabled.");
-    }
+    try {
+        // Блокируем кнопку на время загрузки
+        sendBtn.disabled = true;
 
-    if (chatSocket) {
-        if (!chatSocket.connected) {
-            showNotification("Соединение с сервером устанавливается... Отправляем.", true);
+        if (selectedImageFile) {
+            showNotification('Получение ссылки для загрузки фото...', false);
+
+            const extension = selectedImageFile.name.split('.').pop();
+            const contentType = selectedImageFile.type;
+
+            // 1. Идем к нашему REST API за временной ссылкой для S3
+            const presignedRes = await fetch(`/api/v1/profile/me/avatar/presigned-url?extension=${extension}&content_type=${encodeURIComponent(contentType)}&file_type=chat`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` }
+            });
+
+            if (!presignedRes.ok) throw new Error("Не удалось получить ссылку для загрузки фото");
+            const uploadData = await presignedRes.json();
+
+            showNotification('Загрузка картинки в облако (S3)...', false);
+
+            // 2. Отправляем сам файл в DO Spaces
+            const s3Res = await fetch(uploadData.upload_url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': contentType,
+                    'x-amz-acl': 'public-read'
+                },
+                body: selectedImageFile
+            });
+
+            if (!s3Res.ok) throw new Error("Ошибка при загрузке картинки в S3");
+
+            // 3. Получаем итоговую публичную ссылку
+            finalPhotoUrl = uploadData.public_url;
         }
 
-        chatSocket.emit("send_message", {
-            room_id: "chat_global",
-            text: text,
-            image_key: imageKey,
-            temp_id: crypto.randomUUID()
-        }, (response) => {
-            if (response && response.status === "error") {
-                showNotification(response.message || "Ошибка при отправке сообщения", true);
-            } else {
-                input.value = '';
-                clearImageSelection();
+        if (chatSocket) {
+            if (!chatSocket.connected) {
+                showNotification("Соединение с сервером не установлено! Обновите страницу.", true);
+                sendBtn.disabled = false;
+                return;
             }
-        });
-    } else {
-        showNotification("Ошибка: чат не инициализирован.", true);
+
+            // Отправляем сообщение по WebSocket
+            chatSocket.emit("send_message", {
+                room_id: "chat_global",
+                text: text,
+                image_key: finalPhotoUrl,
+                temp_id: crypto.randomUUID()
+            }, (response) => {
+                if (response && response.status === "error") {
+                    showNotification(response.message || "Ошибка при отправке сообщения", true);
+                } else {
+                    input.value = '';
+                    clearImageSelection();
+                }
+                sendBtn.disabled = false;
+            });
+        } else {
+            showNotification("Ошибка: чат не инициализирован.", true);
+            sendBtn.disabled = false;
+        }
+    } catch (e) {
+        console.error(e);
+        showNotification(e.message || "Ошибка при отправке", true);
+        sendBtn.disabled = false;
     }
 }
 
