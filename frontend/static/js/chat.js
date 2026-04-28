@@ -28,7 +28,8 @@ async function initChatPage() {
         document.getElementById('chatImageInput').disabled = true;
         document.getElementById('btnAttach').disabled = true;
 
-        return; // Прерываем выполнение, НЕ пытаемся подключить вебсокет
+        // Прерываем выполнение, НЕ пытаемся подключить вебсокет
+        return;
     }
 
     // 2. Если доступ есть — штатно запускаем чат
@@ -55,6 +56,7 @@ function getToken() {
 
     if (token) {
         token = decodeURIComponent(token);
+        // Мощная очистка: вырезаем слово Bearer/bearer в ЛЮБОМ регистре
         token = token.replace(/^bearer\s+/i, '').trim();
     }
     return token;
@@ -137,7 +139,6 @@ function initChatSocket() {
 
     chatSocket = io("/chat", {
         auth: { token: token },
-        // ИСПРАВЛЕНИЕ ПОДКЛЮЧЕНИЯ: Строго заставляем использовать WebSocket (без polling)
         transports: ['websocket']
     });
 
@@ -203,8 +204,8 @@ function renderMessage(msg) {
     const minutes = dateObj.getMinutes().toString().padStart(2, '0');
     let timeStr = `${day} ${month} ${hours}:${minutes}`;
 
-    const authorSpanId = `author-${crypto.randomUUID()}`;
-    const avatarImgId = `avatar-${crypto.randomUUID()}`;
+    const authorSpanId = `author-${generateUUID()}`;
+    const avatarImgId = `avatar-${generateUUID()}`;
 
     const msgDiv = document.createElement('div');
     msgDiv.className = `message ${isOwn ? 'own' : ''}`;
@@ -212,7 +213,6 @@ function renderMessage(msg) {
     const textContent = msg.text || msg.message_text || "";
 
     let imgHtml = '';
-    // msg.image_key — это URL, который возвращается из нашего S3 бакета
     const imageUrl = msg.image_url || msg.image_key;
     if (imageUrl) {
         imgHtml = `<img src="${imageUrl}" class="message-image" alt="Attachment" onload="scrollToBottom()">`;
@@ -392,7 +392,7 @@ async function sendMessage() {
                 room_id: "chat_global",
                 text: text,
                 image_key: finalPhotoUrl,
-                temp_id: crypto.randomUUID()
+                temp_id: generateUUID() // ИСПОЛЬЗУЕМ НАШ БЕЗОПАСНЫЙ ФОЛЛБЕК
             }, (response) => {
                 if (response && response.status === "error") {
                     showNotification(response.message || "Ошибка при отправке сообщения", true);
@@ -411,6 +411,22 @@ async function sendMessage() {
         showNotification(e.message || "Ошибка при отправке", true);
         sendBtn.disabled = false;
     }
+}
+
+// ==========================================
+// УТИЛИТЫ
+// ==========================================
+
+// НАШ СОБСТВЕННЫЙ ГЕНЕРАТОР UUID, КОТОРЫЙ РАБОТАЕТ ВЕЗДЕ (ДАЖЕ БЕЗ HTTPS)
+function generateUUID() {
+    if (window.crypto && window.crypto.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+    // Фоллбек для http:// адресов
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        let r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 function escapeHtml(unsafe) {
