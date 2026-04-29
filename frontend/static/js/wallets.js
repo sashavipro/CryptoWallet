@@ -1,3 +1,4 @@
+// Глобальные переменные
 let currentWallets =[];
 let currentOpenWalletId = null;
 let walletSocket = null;
@@ -6,7 +7,7 @@ window.waitingForWalletTx = null;
 // Глобальные переменные для сортировки
 let currentModalTxs =[];
 let currentSortCol = 'age';
-let currentSortAsc = false; // По умолчанию от новых (desc)
+let currentSortAsc = false; // По умолчанию от новых к старым
 
 function getCookie(name) {
     let matches = document.cookie.match(new RegExp(
@@ -15,7 +16,6 @@ function getCookie(name) {
     return matches ? decodeURIComponent(matches[1]) : undefined;
 }
 
-// Формат возраста в стиле Etherscan
 function timeAgo(timestampSeconds) {
     if (!timestampSeconds || timestampSeconds === "0" || timestampSeconds === 0) {
         return '<span style="color:#f39c12">Pending...</span>';
@@ -28,6 +28,23 @@ function timeAgo(timestampSeconds) {
     if (hours < 24) return `${hours} hrs ago`;
     const days = Math.floor(hours / 24);
     return `${days} days ago`;
+}
+
+// Вспомогательная функция для расчета комиссии (поддерживает данные базы и Etherscan)
+function getTxFee(tx) {
+    if (tx.tx_fee) return parseFloat(tx.tx_fee);
+    if (tx.gasUsed && tx.gasPrice) return (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
+    return 0;
+}
+
+// Вспомогательная функция для числового статуса сортировки
+function getStatusVal(tx) {
+    const rawStatus = String(tx.status || "").toLowerCase();
+    const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
+    const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
+    if (isSuccess) return 2;
+    if (isError) return 0;
+    return 1; // Pending
 }
 
 const txChannel = new BroadcastChannel('wallet_tx_channel');
@@ -110,7 +127,7 @@ function initWalletSocket() {
     const token = getCookie('access_token');
     if (!token) return;
 
-    walletSocket = io("/transaction", { auth: { token: token }, transports:['websocket'] });
+    walletSocket = io("/transaction", { auth: { token: token }, transports: ['websocket'] });
 
     walletSocket.on("transaction_status_changed", (data) => {
         if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
@@ -240,7 +257,7 @@ window.openTxHistory = (walletId, address) => {
 };
 
 // =====================================
-// ЛОГИКА СОРТИРОВКИ И РЕНДЕРА ТАБЛИЦЫ
+// ЛОГИКА СОРТИРОВКИ В JS
 // =====================================
 window.toggleSort = function(col) {
     if (currentSortCol === col) {
@@ -252,12 +269,14 @@ window.toggleSort = function(col) {
     applySortAndRender();
 };
 
-function applySortAndRender() {['age', 'fee', 'status'].forEach(c => {
+function applySortAndRender() {
+    const cols =['age', 'fee', 'status'];
+    cols.forEach(c => {
         const el = document.getElementById(`sort-${c}`);
-        if (el) el.textContent = '';
+        if (el) el.innerHTML = '&#8597;'; // Иконка по умолчанию
     });
 
-    const icon = currentSortAsc ? ' ▲' : ' ▼';
+    const icon = currentSortAsc ? '▲' : '▼';
     const activeEl = document.getElementById(`sort-${currentSortCol}`);
     if (activeEl) activeEl.textContent = icon;
 
@@ -269,13 +288,11 @@ function applySortAndRender() {['age', 'fee', 'status'].forEach(c => {
             valA = parseInt(a.timeStamp || 0);
             valB = parseInt(b.timeStamp || 0);
         } else if (currentSortCol === 'fee') {
-            valA = parseFloat(a.tx_fee || 0);
-            valB = parseFloat(b.tx_fee || 0);
+            valA = getTxFee(a);
+            valB = getTxFee(b);
         } else if (currentSortCol === 'status') {
-            const sA = String(a.status || "").toLowerCase();
-            const sB = String(b.status || "").toLowerCase();
-            valA = (sA === 'success' || sA === '1') ? 2 : (sA === 'pending' ? 1 : 0);
-            valB = (sB === 'success' || sB === '1') ? 2 : (sB === 'pending' ? 1 : 0);
+            valA = getStatusVal(a);
+            valB = getStatusVal(b);
         }
 
         if (valA < valB) return currentSortAsc ? -1 : 1;
@@ -328,13 +345,13 @@ function renderTxsTable(txs) {
         const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
         const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
 
-        let statusHtml = '<span style="color: #f39c12; font-size: 15px;">Pending</span>';
+        let statusHtml = '<span style="color: #f39c12; font-size: 14px; font-weight: bold;">Pending</span>';
         let statusCode = 'pending';
         if (isSuccess) {
-            statusHtml = '<span style="color: #27ae60; font-size: 15px;">Success</span>';
+            statusHtml = '<span style="color: #27ae60; font-size: 14px; font-weight: bold;">Success</span>';
             statusCode = 'success';
         } else if (isError) {
-            statusHtml = '<span style="color: #e74c3c; font-size: 15px;">Failed</span>';
+            statusHtml = '<span style="color: #e74c3c; font-size: 14px; font-weight: bold;">Failed</span>';
             statusCode = 'failed';
         }
 
@@ -363,7 +380,8 @@ function renderTxsTable(txs) {
             hashDisplay = `<span style="color: #888; font-family: monospace;">Pending...</span>`;
         }
 
-        const txFee = tx.tx_fee ? Number(parseFloat(tx.tx_fee).toFixed(8)).toString() : '0';
+        const rawFee = getTxFee(tx);
+        const txFee = rawFee > 0 ? Number(rawFee.toFixed(8)).toString() : '0';
         const ageStr = timeAgo(tx.timeStamp);
 
         newHtml += `
@@ -375,7 +393,7 @@ function renderTxsTable(txs) {
                 <td><strong>${valEth}</strong> Ether</td>
                 <td style="color: #3498db;">${ageStr}</td>
                 <td style="text-align: right; color: #555;">${txFee} <span style="color: #27ae60; font-size: 12px;" title="Txn Fee">💡</span></td>
-                <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: right;">${statusHtml}</td>
+                <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: center;">${statusHtml}</td>
             </tr>
         `;
     });
