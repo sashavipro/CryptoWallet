@@ -5,7 +5,7 @@ window.waitingForWalletTx = null;
 
 let currentModalTxs =[];
 let currentSortCol = 'age';
-let currentSortAsc = false;
+let currentSortAsc = false; // По умолчанию сортируем от новых к старым (DESC)
 
 function getCookie(name) {
     let matches = document.cookie.match(new RegExp(
@@ -19,7 +19,8 @@ function timeAgo(timestampSeconds) {
         return '<span style="color:#f39c12">Pending...</span>';
     }
     const seconds = Math.floor(Date.now() / 1000) - parseInt(timestampSeconds);
-    if (seconds < 60) return `${Math.max(0, seconds)} secs ago`;
+    if (seconds < 0) return `0 secs ago`; // Защита от опережения времени сервера
+    if (seconds < 60) return `${seconds} secs ago`;
     const minutes = Math.floor(seconds / 60);
     if (minutes < 60) return `${minutes} mins ago`;
     const hours = Math.floor(minutes / 60);
@@ -40,7 +41,7 @@ function getStatusVal(tx) {
     const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
     if (isSuccess) return 2;
     if (isError) return 0;
-    return 1;
+    return 1; // 1 - это Pending
 }
 
 const txChannel = new BroadcastChannel('wallet_tx_channel');
@@ -88,15 +89,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
 
-            // Безопасное чтение ответа
             const textResponse = await res.text();
             let responseData = {};
-            try {
-                responseData = JSON.parse(textResponse);
-            } catch(err) {
-                console.error("Non-JSON Response:", textResponse);
-                responseData = { detail: "Критическая ошибка сервера (500)" };
-            }
+            try { responseData = JSON.parse(textResponse); } catch(err) { responseData = { detail: "Ошибка сервера" }; }
 
             if (res.ok) {
                 document.getElementById('sendToAddress').value = '';
@@ -133,29 +128,52 @@ function initWalletSocket() {
     walletSocket = io("/transaction", { auth: { token: token }, transports: ['websocket'] });
 
     walletSocket.on("transaction_status_changed", (data) => {
-        // МГНОВЕННОЕ ОБНОВЛЕНИЕ UI БЕЗ ПЕРЕЗАГРУЗКИ ТАБЛИЦЫ
         const safeHashId = (data.tx_hash || "").toLowerCase();
-        const statusCell = document.getElementById(`tx-status-${safeHashId}`);
+        const statusStr = String(data.status).toLowerCase();
 
-        if (statusCell) {
-            const statusStr = String(data.status).toLowerCase();
-            if (statusStr === 'success' || statusStr === '1') {
-                statusCell.innerHTML = '<span style="color: #4caf50; font-size: 15px;">Success</span>';
-            } else if (statusStr === 'failed' || statusStr === '0') {
-                statusCell.innerHTML = '<span style="color: #f44336; font-size: 15px;">Failed</span>';
-            } else if (statusStr === 'pending') {
-                // ДОБАВЛЕНА ОБРАБОТКА PENDING ДЛЯ ВЕБСОКЕТА
-                statusCell.innerHTML = '<span style="color: #fbc02d; font-size: 15px;">Pending</span>';
-            }
-        }
-
-        // Тихо обновляем данные в фоне, чтобы подтянулась финальная комиссия и настоящий хэш
+        // 1. Оптимистичное обновление таблицы транзакций на лету
         if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
+
+            // Ищем транзакцию по новому хэшу
+            let tx = currentModalTxs.find(t => (t.hash || t.tx_hash || t.id || "").toLowerCase() === safeHashId);
+
+            // Если транзакция всё еще имеет временный ID (pending_uuid), ищем её и обновляем хэш
+            if (!tx) {
+                tx = currentModalTxs.find(t => {
+                    const h = (t.hash || t.tx_hash || t.id || "").toLowerCase();
+                    return !h.startsWith('0x') && String(t.status).toLowerCase() === 'pending';
+                });
+            }
+
+            if (tx) {
+                // Обновляем статус и хэш существующей записи
+                tx.hash = data.tx_hash;
+                tx.status = statusStr;
+                if (data.value) tx.value = data.value;
+                if (statusStr === 'failed') tx.isError = "1";
+                if (statusStr === 'success') tx.txreceipt_status = "1";
+            } else {
+                // Если вообще не нашли — мгновенно вставляем новую строку Pending
+                currentModalTxs.unshift({
+                    hash: data.tx_hash,
+                    from: '---',
+                    to: '---',
+                    value: data.value || '0',
+                    timeStamp: Math.floor(Date.now() / 1000).toString(),
+                    status: statusStr,
+                    tx_fee: '0',
+                    isError: statusStr === 'failed' ? "1" : "0"
+                });
+            }
+
+            // Перерисовываем UI мгновенно
+            applySortAndRender();
+
+            // Запрашиваем полный список с бэкенда тихо в фоне для точных данных
             fetchAndUpdateTxs(currentOpenWalletId);
         }
 
-        // Обновление попапа отправки (если он открыт)
-        const status = String(data.status || "").toLowerCase();
+        // 2. Обновление модалки отправки (если она открыта)
         if (window.waitingForWalletTx && String(window.waitingForWalletTx) === String(data.wallet_id)) {
             const textDiv = document.getElementById('txStatusText');
             const iconDiv = document.getElementById('txStatusIcon');
@@ -165,17 +183,23 @@ function initWalletSocket() {
                 linkDiv.innerHTML = `<a href="https://sepolia.etherscan.io/tx/${data.tx_hash}" target="_blank" style="color: #3498db; text-decoration: none; font-weight: bold;">Посмотреть транзакцию в Etherscan ↗</a>`;
             }
 
-            if (status === 'success' || status === '1') {
+            if (statusStr === 'success' || statusStr === '1') {
                 iconDiv.textContent = '✅';
                 textDiv.textContent = 'Транзакция успешно завершена!';
                 textDiv.style.color = '#27ae60';
                 window.waitingForWalletTx = null;
-            } else if (status === 'failed' || status === '0') {
+            } else if (statusStr === 'failed' || statusStr === '0') {
                 iconDiv.textContent = '❌';
                 textDiv.textContent = 'Ошибка транзакции';
                 textDiv.style.color = '#e74c3c';
                 window.waitingForWalletTx = null;
             }
+        }
+
+        if (statusStr === 'success' || statusStr === '1') {
+            showGlobalAlert(`Транзакция ${data.tx_hash ? data.tx_hash.substring(0,10) : '...'} успешно завершена!`);
+        } else if (statusStr === 'failed' || statusStr === '0') {
+            showGlobalAlert(`Транзакция завершилась ошибкой`, true);
         }
     });
 
@@ -266,30 +290,29 @@ window.openTxHistory = (walletId, address) => {
     currentOpenWalletId = walletId;
     document.getElementById('txHistoryTitle').innerHTML = `Список транзакций <b>ETH</b> кошелька <b>${address}</b>`;
     const tbody = document.getElementById('txTableBody');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Загрузка...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     document.getElementById('txHistoryModal').style.display = 'flex';
     fetchAndUpdateTxs(walletId);
 };
 
 // =====================================
-// ЛОГИКА СОРТИРОВКИ В JS
+// ЛОГИКА СОРТИРОВКИ ПО НАЖАТИЮ
 // =====================================
 window.toggleSort = function(col) {
     if (currentSortCol === col) {
         currentSortAsc = !currentSortAsc;
     } else {
         currentSortCol = col;
-        // По умолчанию: Age -> новые сверху (desc), Fee -> большие сверху (desc), Status -> pending/success (desc)
-        currentSortAsc = false;
+        currentSortAsc = false; // При выборе новой колонки всегда сначала сортируем от большего к меньшему (DESC)
     }
     applySortAndRender();
 };
 
 function applySortAndRender() {
-    const columns =['age', 'fee', 'status'];
+    const columns = ['age', 'fee', 'status'];
     columns.forEach(c => {
         const el = document.getElementById(`sort-${c}`);
-        if (el) el.innerHTML = '&#8597;'; // Сброс иконок сортировки
+        if (el) el.innerHTML = '&#8597;'; // Иконка по умолчанию (вверх-вниз)
     });
 
     const icon = currentSortAsc ? '▲' : '▼';
@@ -311,7 +334,6 @@ function applySortAndRender() {
             valB = getStatusVal(b);
         }
 
-        // Логика ASC / DESC
         if (valA < valB) return currentSortAsc ? -1 : 1;
         if (valA > valB) return currentSortAsc ? 1 : -1;
         return 0;
@@ -324,13 +346,13 @@ function fetchAndUpdateTxs(walletId) {
     if (currentOpenWalletId !== walletId) return;
 
     if (!walletSocket || !walletSocket.connected) {
-        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
+        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
         return;
     }
 
     walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
         if (!response || response.status === "error") {
-            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
+            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
             return;
         }
         currentModalTxs = response.data;
@@ -338,7 +360,6 @@ function fetchAndUpdateTxs(walletId) {
     });
 }
 
-// === РЕНДЕР ТАБЛИЦЫ КАК НА СКРИНШОТЕ ===
 function renderTxsTable(txs) {
     const tbody = document.getElementById('txTableBody');
     if (txs.length === 0) {
@@ -362,8 +383,8 @@ function renderTxsTable(txs) {
         const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
         const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
 
-        // Стилизация статусов как на скриншоте (Светло-оранжевый, Зеленый, Красный)
-        let statusHtml = '<span style="color: #fbc02d; font-size: 15px;">Pending</span>'; // Желто-оранжевый
+        // Цвета как на скриншоте
+        let statusHtml = '<span style="color: #fbc02d; font-size: 15px;">Pending</span>'; // Оранжевый
         let statusCode = 'pending';
         if (isSuccess) {
             statusHtml = '<span style="color: #4caf50; font-size: 15px;">Success</span>'; // Зеленый
@@ -373,13 +394,11 @@ function renderTxsTable(txs) {
             statusCode = 'failed';
         }
 
-        // Форматирование Value (значения)
+        // Форматирование суммы
         let valNum = parseFloat(tx.value || 0);
-        if (valNum > 1000000000) valNum = valNum / 1e18; // Конвертация wei -> ether если нужно
-        // Убираем лишние нули в конце, но оставляем точность
+        if (valNum > 1000000000) valNum = valNum / 1e18;
         const valEth = Number(valNum.toFixed(15)).toString();
 
-        // Обрезка адресов как на скриншоте
         const formatAddr = (addr) => {
             if (!addr || addr === '---') return '---';
             return addr.substring(0, 22) + '...';
@@ -398,11 +417,10 @@ function renderTxsTable(txs) {
             hashDisplay = `<span style="color: #888; font-family: monospace;">Pending...</span>`;
         }
 
-        // Комиссия (Txn Fee)
+        // Комиссия (Fee)
         const rawFee = getTxFee(tx);
         const txFeeHtml = rawFee > 0 ? `${Number(rawFee.toFixed(8)).toString()} <span style="color: #4caf50; font-size: 12px;" title="Txn Fee">💡</span>` : `0 <span style="color: #4caf50; font-size: 12px;">💡</span>`;
 
-        // Возраст (Age)
         const ageStr = timeAgo(tx.timeStamp);
 
         newHtml += `
@@ -413,7 +431,7 @@ function renderTxsTable(txs) {
                 <td><span style="color:#000;">${valEth} Ether</span></td>
                 <td style="color: #3498db;">${ageStr}</td>
                 <td style="color: #888;">${txFeeHtml}</td>
-                <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: center;">${statusHtml}</td>
+                <td style="text-align: center;">${statusHtml}</td>
             </tr>
         `;
     });
@@ -430,10 +448,7 @@ window.closeModal = (id) => {
 
 function showGlobalAlert(message, isError = false, isWarning = false) {
     const alertDiv = document.getElementById('globalAlert');
-    if (!alertDiv) {
-        alert(message);
-        return;
-    }
+    if (!alertDiv) { alert(message); return; }
     alertDiv.style.display = 'block';
 
     if (isWarning) {
