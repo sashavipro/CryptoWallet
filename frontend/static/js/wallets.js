@@ -6,7 +6,7 @@ window.waitingForWalletTx = null;
 // Глобальные переменные для сортировки
 let currentModalTxs =[];
 let currentSortCol = 'age';
-let currentSortAsc = false; // По умолчанию от новых (desc)
+let currentSortAsc = false; // По умолчанию от новых к старым
 
 function getCookie(name) {
     let matches = document.cookie.match(new RegExp(
@@ -29,14 +29,12 @@ function timeAgo(timestampSeconds) {
     return `${days} days ago`;
 }
 
-// Вспомогательная функция для расчета комиссии
 function getTxFee(tx) {
     if (tx.tx_fee) return parseFloat(tx.tx_fee);
     if (tx.gasUsed && tx.gasPrice) return (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
     return 0;
 }
 
-// Вспомогательная функция для числового статуса сортировки
 function getStatusVal(tx) {
     const rawStatus = String(tx.status || "").toLowerCase();
     const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
@@ -128,8 +126,13 @@ function initWalletSocket() {
 
     walletSocket = io("/transaction", { auth: { token: token }, transports: ['websocket'] });
 
+    walletSocket.on("connect", () => {
+        console.log("Успешно подключились к WS /transaction!");
+    });
+
     walletSocket.on("transaction_status_changed", (data) => {
-        if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
+        // Мгновенное обновление таблицы, если модалка открыта
+        if (currentOpenWalletId && String(currentOpenWalletId) === String(data.wallet_id)) {
             fetchAndUpdateTxs(currentOpenWalletId);
         }
 
@@ -155,13 +158,20 @@ function initWalletSocket() {
                 textDiv.textContent = 'Ошибка транзакции';
                 textDiv.style.color = '#e74c3c';
                 window.waitingForWalletTx = null;
+            } else if (status === 'pending') {
+                iconDiv.textContent = '⏳';
+                textDiv.textContent = 'Отправлена в блокчейн...';
+                textDiv.style.color = '#f39c12';
             }
         }
 
+        // Показываем уведомление
         if (status === 'success' || status === '1') {
             showGlobalAlert(`Транзакция ${hashDisplay} успешно завершена!`);
         } else if (status === 'failed' || status === '0') {
             showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой`, true);
+        } else if (status === 'pending') {
+            showGlobalAlert(`Транзакция в обработке... Ожидаем блокчейн.`);
         }
     });
 
@@ -230,11 +240,13 @@ window.requestFaucet = async (walletId) => {
         if (res.ok) {
             showGlobalAlert('ETH успешно запрошен! Ожидайте подтверждения сети.');
             txChannel.postMessage({ type: 'NEW_PENDING_TX', walletId: walletId });
+
             document.getElementById('txStatusIcon').textContent = '⏳';
             document.getElementById('txStatusText').textContent = 'Ожидание Faucet...';
             document.getElementById('txStatusText').style.color = '#f39c12';
             document.getElementById('txStatusLink').innerHTML = '<span style="color: #888;">Формирование хэша...</span>';
             document.getElementById('txStatusModal').style.display = 'flex';
+
             window.waitingForWalletTx = walletId;
             fetchAndUpdateTxs(walletId);
         } else {
@@ -270,13 +282,11 @@ window.toggleSort = function(col) {
 
 function applySortAndRender() {
     const cols =['age', 'fee', 'status'];
-    // Сбрасываем иконки во всех колонках
     cols.forEach(c => {
         const el = document.getElementById(`sort-${c}`);
-        if (el) el.innerHTML = '&#8597;'; // Нейтральная двойная стрелочка
+        if (el) el.innerHTML = '&#8597;';
     });
 
-    // Устанавливаем иконку для активной колонки
     const icon = currentSortAsc ? '▲' : '▼';
     const activeEl = document.getElementById(`sort-${currentSortCol}`);
     if (activeEl) activeEl.textContent = icon;
@@ -305,18 +315,20 @@ function applySortAndRender() {
 }
 
 function fetchAndUpdateTxs(walletId) {
-    if (currentOpenWalletId !== walletId) return;
-
     if (!walletSocket || !walletSocket.connected) {
         document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
         return;
     }
 
     walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
+        // Защита: пока ждали ответ, пользователь мог закрыть или переключить модалку
+        if (currentOpenWalletId !== walletId) return;
+
         if (!response || response.status === "error") {
             document.getElementById('txTableBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
             return;
         }
+
         currentModalTxs = response.data;
         applySortAndRender();
     });
@@ -328,6 +340,9 @@ function renderTxsTable(txs) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Транзакций не найдено.</td></tr>';
         return;
     }
+
+    const myWallet = currentWallets.find(w => w.id === currentOpenWalletId);
+    const myAddress = myWallet ? myWallet.address.toLowerCase() : '';
 
     let newHtml = '';
     const seenHashes = new Set();
@@ -365,6 +380,9 @@ function renderTxsTable(txs) {
         const fromAddr = tx.from || tx.from_address || '---';
         const toAddr = tx.to || tx.to_address || '---';
 
+        const isOut = fromAddr.toLowerCase() === myAddress;
+        const typeBadge = `<span class="${isOut ? 'badge-out' : 'badge-in'}">${isOut ? 'OUT' : 'IN'}</span>`;
+
         const fromDisplay = fromAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${fromAddr}" target="_blank" class="tx-link" title="${fromAddr}">${formatAddr(fromAddr)}</a>` : '---';
         const toDisplay = toAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${toAddr}" target="_blank" class="tx-link" title="${toAddr}">${formatAddr(toAddr)}</a>` : '---';
 
@@ -379,7 +397,6 @@ function renderTxsTable(txs) {
         const txFee = rawFee > 0 ? Number(rawFee.toFixed(8)).toString() : '0';
         const ageStr = timeAgo(tx.timeStamp);
 
-        // УБРАЛИ колонку с бейджами IN/OUT, порядок 7 колонок сохранен
         newHtml += `
             <tr id="tx-row-${safeHashId}">
                 <td>${hashDisplay}</td>

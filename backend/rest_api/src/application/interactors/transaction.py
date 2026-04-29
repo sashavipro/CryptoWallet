@@ -47,12 +47,7 @@ class CreatePendingTransactionInteractor:
     async def __call__(
         self, user_id: uuid.UUID, request: CreatePendingTransactionRequest
     ) -> TransactionResponse:
-        """Execute the pending transaction creation process.
-
-        Validates the wallet, creates a local pending transaction record,
-        publishes an event to the worker to process the transaction, and
-        returns the created transaction details.
-        """
+        """Execute the pending transaction creation process."""
         logger.info("Initiating async transaction for user: %s", user_id)
 
         wallet = await self.wallet_gateway.get_wallet_by_id(request.wallet_id)
@@ -84,6 +79,18 @@ class CreatePendingTransactionInteractor:
             to_address=request.to_address,
             value_eth=str(request.value),
         )
+
+        affected_wallets = await self.wallet_gateway.get_wallets_by_addresses(
+            [tx.from_address, tx.to_address]
+        )
+        for w in affected_wallets:
+            await self.event_publisher.publish_tx_status_updated(
+                user_id=str(w.user_id),
+                wallet_id=str(w.id),
+                tx_hash=tx.tx_hash,
+                status=tx.status.value.lower(),
+                value=str(tx.value),
+            )
 
         return TransactionResponse(
             id=tx.id,
@@ -140,44 +147,43 @@ class ProcessTransactionCallbackInteractor:
 
             await self.tx_gateway.update_transaction(tx)
 
-            wallet = await self.wallet_gateway.get_wallet_by_id(tx.wallet_id)
-            if wallet:
-                wallet_address = wallet.address
-                wallet_id_to_sync = tx.wallet_id
-                tx_to_publish = {
-                    "user_id": str(wallet.user_id),
-                    "wallet_id": str(tx.wallet_id),
-                    "tx_hash": tx.tx_hash,
-                    "status": status,
-                    "value": str(tx.value),
-                    "error": error,
-                }
+            affected_wallets = await self.wallet_gateway.get_wallets_by_addresses(
+                [tx.from_address, tx.to_address]
+            )
 
-        if tx_to_publish:
-            await self.event_publisher.publish_tx_status_updated(**tx_to_publish)
+        for w in affected_wallets:
+            await self.event_publisher.publish_tx_status_updated(
+                user_id=str(w.user_id),
+                wallet_id=str(w.id),
+                tx_hash=tx.tx_hash,
+                status=status,
+                value=str(tx.value),
+                error=error,
+            )
 
-        if tx_to_publish and status in ["success", "failed"]:
-            await asyncio.sleep(3)
-            try:
-                live_balance_str = await self.worker_client.get_balance(wallet_address)
-                async with self.uow:
-                    fresh_wallet = await self.wallet_gateway.get_wallet_by_id(
-                        wallet_id_to_sync
-                    )
-                    if fresh_wallet:
-                        fresh_wallet.balance = Decimal(str(live_balance_str))
-                        fresh_wallet.balance_updated_at = datetime.datetime.now(
-                            datetime.UTC
-                        )
-                        await self.wallet_gateway.update_wallet(fresh_wallet)
+        if status in ["success", "failed"]:
+            await asyncio.sleep(2)
+            for w in affected_wallets:
+                try:
+                    live_balance_str = await self.worker_client.get_balance(w.address)
+                    async with self.uow:
+                        fresh_wallet = await self.wallet_gateway.get_wallet_by_id(w.id)
+                        if fresh_wallet:
+                            fresh_wallet.balance = Decimal(str(live_balance_str))
+                            fresh_wallet.balance_updated_at = datetime.datetime.now(
+                                datetime.UTC
+                            )
+                            await self.wallet_gateway.update_wallet(fresh_wallet)
 
                     await self.event_publisher.publish_balance_updated(
-                        user_id=tx_to_publish["user_id"],
-                        wallet_id=tx_to_publish["wallet_id"],
+                        user_id=str(w.user_id),
+                        wallet_id=str(w.id),
                         balance=live_balance_str,
                     )
-            except Exception:
-                logger.exception("Failed to update balance after tx finish")
+                except Exception:
+                    logger.exception(
+                        "Failed to update balance for %s after tx finish", w.address
+                    )
 
 
 class GetTransactionsInteractor:
