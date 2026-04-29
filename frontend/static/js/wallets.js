@@ -143,10 +143,13 @@ function initWalletSocket() {
                 statusCell.innerHTML = '<span style="color: #4caf50; font-size: 15px;">Success</span>';
             } else if (statusStr === 'failed' || statusStr === '0') {
                 statusCell.innerHTML = '<span style="color: #f44336; font-size: 15px;">Failed</span>';
+            } else if (statusStr === 'pending') {
+                // ДОБАВЛЕНА ОБРАБОТКА PENDING ДЛЯ ВЕБСОКЕТА
+                statusCell.innerHTML = '<span style="color: #fbc02d; font-size: 15px;">Pending</span>';
             }
         }
 
-        // Тихо обновляем данные в фоне, чтобы подтянулась комиссия (Txn Fee)
+        // Тихо обновляем данные в фоне, чтобы подтянулась финальная комиссия и настоящий хэш
         if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
             fetchAndUpdateTxs(currentOpenWalletId);
         }
