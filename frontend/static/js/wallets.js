@@ -1,4 +1,3 @@
-// Глобальные переменные
 let currentWallets =[];
 let currentOpenWalletId = null;
 let walletSocket = null;
@@ -7,7 +6,7 @@ window.waitingForWalletTx = null;
 // Глобальные переменные для сортировки
 let currentModalTxs =[];
 let currentSortCol = 'age';
-let currentSortAsc = false; // По умолчанию от новых к старым
+let currentSortAsc = false; // По умолчанию от новых (desc)
 
 function getCookie(name) {
     let matches = document.cookie.match(new RegExp(
@@ -30,7 +29,7 @@ function timeAgo(timestampSeconds) {
     return `${days} days ago`;
 }
 
-// Вспомогательная функция для расчета комиссии (поддерживает данные базы и Etherscan)
+// Вспомогательная функция для расчета комиссии
 function getTxFee(tx) {
     if (tx.tx_fee) return parseFloat(tx.tx_fee);
     if (tx.gasUsed && tx.gasPrice) return (parseFloat(tx.gasUsed) * parseFloat(tx.gasPrice)) / 1e18;
@@ -251,7 +250,7 @@ window.openTxHistory = (walletId, address) => {
     currentOpenWalletId = walletId;
     document.getElementById('txHistoryTitle').innerHTML = `Список транзакций <b>ETH</b> кошелька <b>${address}</b>`;
     const tbody = document.getElementById('txTableBody');
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Загрузка...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
     document.getElementById('txHistoryModal').style.display = 'flex';
     fetchAndUpdateTxs(walletId);
 };
@@ -271,11 +270,13 @@ window.toggleSort = function(col) {
 
 function applySortAndRender() {
     const cols =['age', 'fee', 'status'];
+    // Сбрасываем иконки во всех колонках
     cols.forEach(c => {
         const el = document.getElementById(`sort-${c}`);
-        if (el) el.innerHTML = '&#8597;'; // Иконка по умолчанию
+        if (el) el.innerHTML = '&#8597;'; // Нейтральная двойная стрелочка
     });
 
+    // Устанавливаем иконку для активной колонки
     const icon = currentSortAsc ? '▲' : '▼';
     const activeEl = document.getElementById(`sort-${currentSortCol}`);
     if (activeEl) activeEl.textContent = icon;
@@ -307,29 +308,26 @@ function fetchAndUpdateTxs(walletId) {
     if (currentOpenWalletId !== walletId) return;
 
     if (!walletSocket || !walletSocket.connected) {
-        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
+        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
         return;
     }
 
     walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
         if (!response || response.status === "error") {
-            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
+            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
             return;
         }
-        currentModalTxs = response.data; // Сохраняем в кэш
-        applySortAndRender(); // Сортируем и рисуем
+        currentModalTxs = response.data;
+        applySortAndRender();
     });
 }
 
 function renderTxsTable(txs) {
     const tbody = document.getElementById('txTableBody');
     if (txs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Транзакций не найдено.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Транзакций не найдено.</td></tr>';
         return;
     }
-
-    const myWallet = currentWallets.find(w => w.id === currentOpenWalletId);
-    const myAddress = myWallet ? myWallet.address.toLowerCase() : '';
 
     let newHtml = '';
     const seenHashes = new Set();
@@ -367,9 +365,6 @@ function renderTxsTable(txs) {
         const fromAddr = tx.from || tx.from_address || '---';
         const toAddr = tx.to || tx.to_address || '---';
 
-        const isOut = fromAddr.toLowerCase() === myAddress;
-        const typeBadge = `<span class="${isOut ? 'badge-out' : 'badge-in'}">${isOut ? 'OUT' : 'IN'}</span>`;
-
         const fromDisplay = fromAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${fromAddr}" target="_blank" class="tx-link" title="${fromAddr}">${formatAddr(fromAddr)}</a>` : '---';
         const toDisplay = toAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${toAddr}" target="_blank" class="tx-link" title="${toAddr}">${formatAddr(toAddr)}</a>` : '---';
 
@@ -384,15 +379,15 @@ function renderTxsTable(txs) {
         const txFee = rawFee > 0 ? Number(rawFee.toFixed(8)).toString() : '0';
         const ageStr = timeAgo(tx.timeStamp);
 
+        // УБРАЛИ колонку с бейджами IN/OUT, порядок 7 колонок сохранен
         newHtml += `
             <tr id="tx-row-${safeHashId}">
-                <td>${typeBadge}</td>
                 <td>${hashDisplay}</td>
                 <td>${fromDisplay}</td>
                 <td>${toDisplay}</td>
                 <td><strong>${valEth}</strong> Ether</td>
                 <td style="color: #3498db;">${ageStr}</td>
-                <td style="text-align: right; color: #555;">${txFee} <span style="color: #27ae60; font-size: 12px;" title="Txn Fee">💡</span></td>
+                <td style="text-align: right; color: #555;">${txFee}</td>
                 <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: center;">${statusHtml}</td>
             </tr>
         `;
