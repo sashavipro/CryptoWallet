@@ -222,8 +222,8 @@ class GetTransactionsInteractor:
         except Exception:
             logger.exception("Etherscan unreachable")
 
-        local_txs = await self.transaction_gateway.get_transactions_by_wallet_id(
-            wallet_id
+        local_txs = await self.transaction_gateway.get_transactions_by_address(
+            wallet.address
         )
 
         confirmed_hashes = {tx["hash"].lower() for tx in etherscan_txs if "hash" in tx}
@@ -253,6 +253,7 @@ class GetTransactionsInteractor:
                     "value": str(int(tx.value * Decimal("1e18"))),
                     "timeStamp": str(int(tx.created_at.timestamp())),
                     "status": tx.status.value.lower(),
+                    "tx_fee": str(tx.tx_fee),
                     "isError": "1" if tx.status == TransactionStatus.FAILED else "0",
                 }
             )

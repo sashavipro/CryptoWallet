@@ -3,6 +3,8 @@
 import logging
 import uuid
 
+from sqlalchemy import func
+from sqlalchemy import or_
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,10 +51,7 @@ class TransactionGateway:
     async def update_transaction(
         self, transaction: DomainTransaction
     ) -> DomainTransaction:
-        """Update existing transaction records.
-
-        For example, status changes to SUCCESS or FAILED.
-        """
+        """Update existing transaction records."""
         db_tx = map_domain_to_model(transaction)
         merged_tx = await self.session.merge(db_tx)
         await self.session.flush()
@@ -66,6 +65,25 @@ class TransactionGateway:
         query = (
             select(DBTransaction)
             .where(DBTransaction.wallet_id == wallet_id)
+            .order_by(DBTransaction.created_at.desc())
+        )
+        result = await self.session.execute(query)
+        db_txs = result.scalars().all()
+
+        return [map_transaction_to_domain(tx) for tx in db_txs]
+
+    async def get_transactions_by_address(
+        self, address: str
+    ) -> list[DomainTransaction]:
+        """Retrieve all transactions where the address is EITHER sender OR receiver."""
+        query = (
+            select(DBTransaction)
+            .where(
+                or_(
+                    func.lower(DBTransaction.from_address) == address.lower(),
+                    func.lower(DBTransaction.to_address) == address.lower(),
+                )
+            )
             .order_by(DBTransaction.created_at.desc())
         )
         result = await self.session.execute(query)

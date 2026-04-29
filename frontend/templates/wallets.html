@@ -105,6 +105,9 @@
 
     .tx-link { color: #3498db; text-decoration: none; font-family: monospace; font-size: 14px; }
     .tx-link:hover { text-decoration: underline; color: #2980b9; }
+
+    .sortable-th { cursor: pointer; user-select: none; }
+    .sortable-th:hover { background: #e2e8f0; }
 </style>
 {% endblock %}
 
@@ -153,10 +156,10 @@
                         <th>From</th>
                         <th>To</th>
                         <th>Value</th>
-                        <th style="color: #3498db;">Age</th>
-                        <!-- ИСПРАВЛЕНИЕ: Смещаем вправо -->
-                        <th style="text-align: right;">Txn Fee</th>
-                        <th style="text-align: right;">Status</th>
+                        <!-- КЛИКАБЕЛЬНЫЕ КОЛОНКИ -->
+                        <th class="sortable-th" style="color: #3498db;" onclick="toggleSort('age')">Age <span id="sort-age">▼</span></th>
+                        <th class="sortable-th" style="text-align: right;" onclick="toggleSort('fee')">Txn Fee <span id="sort-fee"></span></th>
+                        <th class="sortable-th" style="text-align: right;" onclick="toggleSort('status')">Status <span id="sort-status"></span></th>
                     </tr>
                 </thead>
                 <tbody id="txTableBody">
