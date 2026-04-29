@@ -85,7 +85,7 @@
     /* Модальные окна */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: #fff; padding: 20px; border-radius: 4px; width: 500px; position: relative; }
-    .modal-lg { width: 800px; max-height: 90vh; display: flex; flex-direction: column;}
+    .modal-lg { width: 900px; max-height: 90vh; display: flex; flex-direction: column;}
     .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
     .modal-close { cursor: pointer; font-size: 18px; border: none; background: none; }
 
@@ -99,10 +99,16 @@
     .tx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .tx-table th, .tx-table td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
     .tx-table th { background: #f9f9f9; position: sticky; top: 0; }
-    .tx-hash, .tx-addr { font-family: monospace; color: #3498db; text-decoration: none; }
+    .tx-hash, .tx-addr { font-family: monospace; color: #3498db; text-decoration: none; font-weight: 500; }
+    .tx-addr:hover, .tx-hash:hover { text-decoration: underline; color: #2980b9; }
+
     .status-success { color: #27ae60; font-weight: bold; }
     .status-failed { color: #e74c3c; font-weight: bold; }
     .status-pending { color: #f39c12; font-weight: bold; }
+
+    /* Бейджи IN / OUT */
+    .badge-in { background: #e8f5e9; color: #27ae60; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #27ae60; }
+    .badge-out { background: #fff3cd; color: #f39c12; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #f39c12; }
 </style>
 {% endblock %}
 
@@ -147,7 +153,9 @@
             <table class="tx-table">
                 <thead>
                     <tr>
+                        <th>Type</th>
                         <th>Tx Hash</th>
+                        <th>Age</th>
                         <th>From</th>
                         <th>To</th>
                         <th>Value</th>

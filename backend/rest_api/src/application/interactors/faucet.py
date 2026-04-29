@@ -70,8 +70,8 @@ class RequestTestnetEthInteractor:
                     time_left = f"{minutes} min."
 
                 error_message = (
-                    "You have already requested testnet ETH. "
-                    f"The next request will be available in {time_left}"
+                    "Вы уже запрашивали тестовый ETH. "
+                    f"Следующий запрос будет доступен через  {time_left}"
                 )
 
                 raise FaucetRateLimitException(error_message)

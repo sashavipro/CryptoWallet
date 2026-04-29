@@ -333,7 +333,7 @@ function clearImageSelection() {
 }
 
 // ==========================================
-// ИСПРАВЛЕННАЯ ОТПРАВКА И ЗАГРУЗКА КАРТИНОК
+// ОТПРАВКА И ЗАГРУЗКА КАРТИНОК
 // ==========================================
 async function sendMessage() {
     const input = document.getElementById('chatInput');
@@ -392,7 +392,7 @@ async function sendMessage() {
                 room_id: "chat_global",
                 text: text,
                 image_key: finalPhotoUrl,
-                temp_id: generateUUID() // ИСПОЛЬЗУЕМ НАШ БЕЗОПАСНЫЙ ФОЛЛБЕК
+                temp_id: generateUUID()
             }, (response) => {
                 if (response && response.status === "error") {
                     showNotification(response.message || "Ошибка при отправке сообщения", true);
