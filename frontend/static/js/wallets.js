@@ -98,7 +98,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('sendValue').value = '';
                 closeModal('sendTxModal');
 
-                txChannel.postMessage({ type: 'NEW_PENDING_TX', walletId: walletId });
+                // Устанавливаем currentOpenWalletId сразу, чтобы WS-события
+                // и fetchAndUpdateTxs работали даже без открытой истории
+                currentOpenWalletId = walletId;
+
+                // Инжектим pending-запись мгновенно — не ждём ответа от сервера
+                const pendingEntry = {
+                    hash: responseData.tx_hash || `pending_${Date.now()}`,
+                    from: responseData.from_address || '---',
+                    to: responseData.to_address || '---',
+                    value: String(Math.round((parseFloat(value) || 0) * 1e18)),
+                    timeStamp: Math.floor(Date.now() / 1000).toString(),
+                    status: 'pending',
+                    tx_fee: '0',
+                    isError: '0'
+                };
+                currentModalTxs.unshift(pendingEntry);
 
                 document.getElementById('txStatusIcon').textContent = '⏳';
                 document.getElementById('txStatusText').textContent = 'Ожидание сети...';
@@ -107,6 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('txStatusModal').style.display = 'flex';
 
                 window.waitingForWalletTx = walletId;
+                // Теперь fetchAndUpdateTxs не вернётся досрочно — currentOpenWalletId совпадает
                 fetchAndUpdateTxs(walletId);
             } else {
                 let errorMsg = responseData.detail ? (Array.isArray(responseData.detail) ? responseData.detail[0].msg : responseData.detail) : "Неизвестная ошибка";
@@ -267,7 +283,19 @@ window.requestFaucet = async (walletId) => {
         const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, { method: 'POST', headers: { 'Authorization': `Bearer ${getCookie('access_token')}` } });
         if (res.ok) {
             showGlobalAlert('ETH успешно запрошен! Ожидайте подтверждения сети.');
-            txChannel.postMessage({ type: 'NEW_PENDING_TX', walletId: walletId });
+
+            // Аналогично отправке — выставляем walletId и инжектим pending
+            currentOpenWalletId = walletId;
+            currentModalTxs.unshift({
+                hash: `pending_faucet_${Date.now()}`,
+                from: 'Faucet',
+                to: '---',
+                value: '0',
+                timeStamp: Math.floor(Date.now() / 1000).toString(),
+                status: 'pending',
+                tx_fee: '0',
+                isError: '0'
+            });
 
             document.getElementById('txStatusIcon').textContent = '⏳';
             document.getElementById('txStatusText').textContent = 'Ожидание Faucet...';
