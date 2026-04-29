@@ -3,10 +3,9 @@ let currentOpenWalletId = null;
 let walletSocket = null;
 window.waitingForWalletTx = null;
 
-// Глобальные переменные для сортировки
 let currentModalTxs =[];
 let currentSortCol = 'age';
-let currentSortAsc = false; // По умолчанию от новых к старым
+let currentSortAsc = false;
 
 function getCookie(name) {
     let matches = document.cookie.match(new RegExp(
@@ -41,7 +40,7 @@ function getStatusVal(tx) {
     const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
     if (isSuccess) return 2;
     if (isError) return 0;
-    return 1; // Pending
+    return 1;
 }
 
 const txChannel = new BroadcastChannel('wallet_tx_channel');
@@ -69,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Пожалуйста, введите корректный адрес Ethereum (начинается с 0x, 42 символа).');
             return;
         }
-
         if (!value || value <= 0) {
             alert('Пожалуйста, введите корректную сумму.');
             return;
@@ -90,7 +88,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
 
-            const responseData = await res.json();
+            // Безопасное чтение ответа
+            const textResponse = await res.text();
+            let responseData = {};
+            try {
+                responseData = JSON.parse(textResponse);
+            } catch(err) {
+                console.error("Non-JSON Response:", textResponse);
+                responseData = { detail: "Критическая ошибка сервера (500)" };
+            }
 
             if (res.ok) {
                 document.getElementById('sendToAddress').value = '';
@@ -112,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultDiv.innerHTML = `<span style="color: #e74c3c;">Ошибка: ${errorMsg}</span>`;
             }
         } catch (e) {
-            resultDiv.innerHTML = `<span style="color: #e74c3c;">Ошибка сети.</span>`;
+            resultDiv.innerHTML = `<span style="color: #e74c3c;">Сетевая ошибка: сервер недоступен.</span>`;
         } finally {
             btnSend.disabled = false;
         }
@@ -126,13 +132,8 @@ function initWalletSocket() {
 
     walletSocket = io("/transaction", { auth: { token: token }, transports: ['websocket'] });
 
-    walletSocket.on("connect", () => {
-        console.log("Успешно подключились к WS /transaction!");
-    });
-
     walletSocket.on("transaction_status_changed", (data) => {
-        // Мгновенное обновление таблицы, если модалка открыта
-        if (currentOpenWalletId && String(currentOpenWalletId) === String(data.wallet_id)) {
+        if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
             fetchAndUpdateTxs(currentOpenWalletId);
         }
 
@@ -158,20 +159,13 @@ function initWalletSocket() {
                 textDiv.textContent = 'Ошибка транзакции';
                 textDiv.style.color = '#e74c3c';
                 window.waitingForWalletTx = null;
-            } else if (status === 'pending') {
-                iconDiv.textContent = '⏳';
-                textDiv.textContent = 'Отправлена в блокчейн...';
-                textDiv.style.color = '#f39c12';
             }
         }
 
-        // Показываем уведомление
         if (status === 'success' || status === '1') {
             showGlobalAlert(`Транзакция ${hashDisplay} успешно завершена!`);
         } else if (status === 'failed' || status === '0') {
             showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой`, true);
-        } else if (status === 'pending') {
-            showGlobalAlert(`Транзакция в обработке... Ожидаем блокчейн.`);
         }
     });
 
@@ -262,7 +256,7 @@ window.openTxHistory = (walletId, address) => {
     currentOpenWalletId = walletId;
     document.getElementById('txHistoryTitle').innerHTML = `Список транзакций <b>ETH</b> кошелька <b>${address}</b>`;
     const tbody = document.getElementById('txTableBody');
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Загрузка...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Загрузка...</td></tr>';
     document.getElementById('txHistoryModal').style.display = 'flex';
     fetchAndUpdateTxs(walletId);
 };
@@ -281,17 +275,17 @@ window.toggleSort = function(col) {
 };
 
 function applySortAndRender() {
-    const cols =['age', 'fee', 'status'];
-    cols.forEach(c => {
+    const columns = ['age', 'fee', 'status'];
+    columns.forEach(c => {
         const el = document.getElementById(`sort-${c}`);
-        if (el) el.innerHTML = '&#8597;';
+        if (el) el.innerHTML = '&#8597;'; // Иконка по умолчанию
     });
 
     const icon = currentSortAsc ? '▲' : '▼';
     const activeEl = document.getElementById(`sort-${currentSortCol}`);
     if (activeEl) activeEl.textContent = icon;
 
-    let sorted = [...currentModalTxs];
+    let sorted =[...currentModalTxs];
     sorted.sort((a, b) => {
         let valA, valB;
 
@@ -315,20 +309,18 @@ function applySortAndRender() {
 }
 
 function fetchAndUpdateTxs(walletId) {
+    if (currentOpenWalletId !== walletId) return;
+
     if (!walletSocket || !walletSocket.connected) {
-        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
+        document.getElementById('txTableBody').innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">Ошибка: нет подключения к серверу реального времени.</td></tr>';
         return;
     }
 
     walletSocket.emit("get_tx_history", { wallet_id: walletId }, (response) => {
-        // Защита: пока ждали ответ, пользователь мог закрыть или переключить модалку
-        if (currentOpenWalletId !== walletId) return;
-
         if (!response || response.status === "error") {
-            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="7" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
+            document.getElementById('txTableBody').innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Ошибка загрузки истории</td></tr>`;
             return;
         }
-
         currentModalTxs = response.data;
         applySortAndRender();
     });
@@ -337,7 +329,7 @@ function fetchAndUpdateTxs(walletId) {
 function renderTxsTable(txs) {
     const tbody = document.getElementById('txTableBody');
     if (txs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Транзакций не найдено.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Транзакций не найдено.</td></tr>';
         return;
     }
 
@@ -399,12 +391,13 @@ function renderTxsTable(txs) {
 
         newHtml += `
             <tr id="tx-row-${safeHashId}">
+                <td>${typeBadge}</td>
                 <td>${hashDisplay}</td>
                 <td>${fromDisplay}</td>
                 <td>${toDisplay}</td>
                 <td><strong>${valEth}</strong> Ether</td>
                 <td style="color: #3498db;">${ageStr}</td>
-                <td style="text-align: right; color: #555;">${txFee}</td>
+                <td style="text-align: right; color: #555;">${txFee} <span style="color: #27ae60; font-size: 12px;" title="Txn Fee">💡</span></td>
                 <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: center;">${statusHtml}</td>
             </tr>
         `;
