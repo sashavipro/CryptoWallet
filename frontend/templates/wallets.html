@@ -94,14 +94,14 @@
     /* СТИЛИ ДЛЯ ТАБЛИЦЫ ИСТОРИИ КАК В ETHERSCAN */
     .modal-lg { width: 1050px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0;}
     .modal-header-etherscan { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #e2e8f0; }
-    .modal-header-etherscan h4 { font-family: Arial, sans-serif; font-size: 15px; color: #000; margin: 0; font-weight: normal; }
-    .modal-close-etherscan { cursor: pointer; font-size: 24px; border: none; background: none; color: #666; padding: 0;}
-    .modal-close-etherscan:hover { color: #000; }
+    .modal-header-etherscan h4 { font-family: Arial, sans-serif; font-size: 15px; color: #000; margin: 0; font-weight: bold; }
+    .modal-close-etherscan { cursor: pointer; font-size: 28px; border: none; background: none; color: #888; padding: 0; line-height: 1;}
+    .modal-close-etherscan:hover { color: #333; }
 
     .tx-table-container { overflow-y: auto; flex: 1; padding: 10px 20px 20px 20px; }
     .tx-table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    .tx-table th { background: #f8f9fa; color: #4a5568; font-weight: bold; font-size: 13px; padding: 12px 10px; text-align: left; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; z-index: 1; }
-    .tx-table td { padding: 14px 10px; vertical-align: middle; border-bottom: 1px solid #e9ecef; font-size: 13px; color: #333; }
+    .tx-table th { background: #f8f9fa; color: #6c757d; font-weight: bold; font-size: 13px; padding: 12px 10px; text-align: left; border-bottom: 1px solid #dee2e6; position: sticky; top: 0; z-index: 1; }
+    .tx-table td { padding: 12px 10px; vertical-align: middle; border-bottom: 1px solid #e9ecef; font-size: 13px; color: #333; }
 
     .tx-link { color: #3498db; text-decoration: none; font-family: monospace; font-size: 14px; }
     .tx-link:hover { text-decoration: underline; color: #2980b9; }
@@ -109,7 +109,7 @@
     /* СТИЛИ КЛИКАБЕЛЬНЫХ ЗАГОЛОВКОВ */
     .sortable-th { color: #3498db !important; cursor: pointer; user-select: none; transition: background 0.2s; white-space: nowrap; }
     .sortable-th:hover { background: #e2e8f0; }
-    .sort-icon { font-size: 12px; margin-left: 4px; color: #3498db; display: inline-block; width: 14px; text-align: center;}
+    .sort-icon { font-size: 10px; margin-left: 4px; color: #3498db; display: inline-block; width: 14px; text-align: center;}
 
     .badge-in { background: #e8f5e9; color: #27ae60; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #27ae60; }
     .badge-out { background: #fff3cd; color: #f39c12; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; border: 1px solid #f39c12; }
@@ -150,21 +150,20 @@
 <div class="modal-overlay" id="txHistoryModal">
     <div class="modal modal-lg">
         <div class="modal-header-etherscan">
-            <h4 id="txHistoryTitle">Список транзакций <b>ETH</b> кошелька <b>...</b></h4>
-            <button class="modal-close-etherscan" onclick="closeModal('txHistoryModal')">✕</button>
+            <h4 id="txHistoryTitle">Список транзакций ETH кошелька ...</h4>
+            <button class="modal-close-etherscan" onclick="closeModal('txHistoryModal')">×</button>
         </div>
         <div class="tx-table-container">
             <table class="tx-table">
                 <thead>
                     <tr>
-                        <th>Type</th>
-                        <th>Txn Hash</th>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>Value</th>
-                        <!-- КЛИКАБЕЛЬНЫЕ КОЛОНКИ СОРТИРОВКИ С ИКОНКАМИ -->
+                        <th style="color: #6c757d;">Txn Hash</th>
+                        <th style="color: #6c757d;">From</th>
+                        <th style="color: #6c757d;">To</th>
+                        <th style="color: #6c757d;">Value</th>
+                        <!-- КЛИКАБЕЛЬНЫЕ КОЛОНКИ СОРТИРОВКИ -->
                         <th class="sortable-th" onclick="toggleSort('age')">Age <span class="sort-icon" id="sort-age">▼</span></th>
-                        <th class="sortable-th" style="text-align: right;" onclick="toggleSort('fee')">Txn Fee <span class="sort-icon" id="sort-fee">&#8597;</span></th>
+                        <th class="sortable-th" onclick="toggleSort('fee')">Txn Fee <span class="sort-icon" id="sort-fee">&#8597;</span></th>
                         <th class="sortable-th" style="text-align: center;" onclick="toggleSort('status')">Status <span class="sort-icon" id="sort-status">&#8597;</span></th>
                     </tr>
                 </thead>
