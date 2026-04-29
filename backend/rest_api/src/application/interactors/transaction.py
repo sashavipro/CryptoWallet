@@ -35,6 +35,7 @@ class CreatePendingTransactionInteractor:
         id_generator: IdGenerator,
         time_provider: TimeProvider,
         worker_client: EthereumWorkerClient,
+        event_publisher: EventPublisher,
     ) -> None:
         """Initialize with required gateways and providers."""
         self.wallet_gateway = wallet_gateway
@@ -43,6 +44,7 @@ class CreatePendingTransactionInteractor:
         self.id_generator = id_generator
         self.time_provider = time_provider
         self.worker_client = worker_client
+        self.event_publisher = event_publisher
 
     async def __call__(
         self, user_id: uuid.UUID, request: CreatePendingTransactionRequest
