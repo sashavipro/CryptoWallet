@@ -1,189 +1,48 @@
-{% extends "base.html" %}
-
-{% block title %}Wallets - Crypto Wallet{% endblock %}
-
-{% block extra_css %}
-<style>
-    .wallets-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-        gap: 20px;
-    }
-
-    .wallet-card {
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        padding: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        display: flex;
-        flex-direction: column;
-        position: relative;
-    }
-
-    .wallet-header {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
-    }
-
-    .eth-logo {
-        width: 40px;
-        height: 40px;
-    }
-
-    .wallet-info {
-        flex: 1;
-    }
-
-    .wallet-label {
-        font-size: 12px;
-        color: #777;
-        margin-bottom: 3px;
-        text-transform: uppercase;
-    }
-
-    .wallet-address {
-        font-family: monospace;
-        font-size: 14px;
-        color: #3498db;
-        text-decoration: none;
-        word-break: break-all;
-    }
-
-    .wallet-balance {
-        font-size: 20px;
-        font-weight: bold;
-        margin-top: 5px;
-    }
-
-    .wallet-actions {
-        display: flex;
-        gap: 10px;
-        margin-top: auto;
-        padding-top: 15px;
-        border-top: 1px solid #eee;
-    }
-
-    .btn-wallet {
-        flex: 1;
-        padding: 8px;
-        border: none;
-        border-radius: 4px;
-        font-size: 11px;
-        cursor: pointer;
-        color: white;
-        font-weight: bold;
-        text-transform: uppercase;
-    }
-
-    .btn-watch { background-color: #2980b9; }
-    .btn-send { background-color: #7bc143; }
-    .btn-faucet { background-color: #f39c12; }
-
-    /* Модальные окна */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: #fff; padding: 20px; border-radius: 4px; width: 500px; position: relative; }
-
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 13px; }
-    .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 3px; font-family: monospace;}
-    .btn-submit-tx { background: #5cb85c; color: white; border: none; padding: 10px 20px; border-radius: 3px; cursor: pointer; font-weight: bold; }
-
-    /* СТИЛИ ДЛЯ ТАБЛИЦЫ ИСТОРИИ КАК В ETHERSCAN */
-    .modal-lg { width: 1050px; max-width: 95vw; max-height: 90vh; display: flex; flex-direction: column; padding: 0;}
-    .modal-header-etherscan { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #e2e8f0; }
-    .modal-header-etherscan h4 { font-family: Arial, sans-serif; font-size: 15px; color: #000; margin: 0; font-weight: normal; }
-    .modal-close-etherscan { cursor: pointer; font-size: 24px; border: none; background: none; color: #666; padding: 0;}
-    .modal-close-etherscan:hover { color: #000; }
-
-    .tx-table-container { overflow-y: auto; flex: 1; padding: 10px 20px 20px 20px; }
-    .tx-table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; }
-    .tx-table th { background: #f8f9fa; color: #4a5568; font-weight: bold; font-size: 13px; padding: 12px 10px; text-align: left; border-bottom: 2px solid #dee2e6; position: sticky; top: 0; z-index: 1; }
-    .tx-table td { padding: 14px 10px; vertical-align: middle; border-bottom: 1px solid #e9ecef; font-size: 13px; color: #333; }
-
-    .tx-link { color: #3498db; text-decoration: none; font-family: monospace; font-size: 14px; }
-    .tx-link:hover { text-decoration: underline; color: #2980b9; }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="section-title" style="margin-bottom: 20px; font-size: 24px;">Кошельки</div>
-
-<div id="globalAlert" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 3px; text-align: center;"></div>
-
-<div class="wallets-container" id="walletsContainer">
-    <div style="color: #888;">Загрузка кошельков...</div>
-</div>
-
-<div class="modal-overlay" id="sendTxModal">
-    <div class="modal">
-        <div class="modal-header-etherscan" style="border-bottom: 1px solid #eee; padding: 0 0 10px 0; margin-bottom: 15px;">
-            <h4 style="font-weight: bold; font-size: 18px;">Отправка ETH</h4>
-            <button class="modal-close-etherscan" onclick="closeModal('sendTxModal')">✕</button>
-        </div>
-        <div class="modal-body">
-            <input type="hidden" id="sendFromWalletId">
-            <div class="form-group">
-                <label>Send To (Address):</label>
-                <input type="text" id="sendToAddress" placeholder="0x...">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Crypto Wallet{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                CRYPTO WALLET
             </div>
-            <div class="form-group">
-                <label>Value (ETH):</label>
-                <input type="number" id="sendValue" step="0.0001" placeholder="0.00">
-            </div>
-            <button class="btn-submit-tx" id="btnSendTx">Send</button>
-            <div id="sendTxResult" style="margin-top: 15px; font-size: 13px; display: none;"></div>
+            <nav class="sidebar-nav">
+                <ul>
+                    <li><a href="/profile" class="{% if request.url.path == '/profile' %}active{% endif %}">Профиль</a></li>
+                    <li><a href="/wallets" class="{% if request.url.path == '/wallets' %}active{% endif %}">Кошельки</a></li>
+                    <li><a href="/ibay" class="{% if request.url.path == '/ibay' %}active{% endif %}">iBay</a></li>
+                    <li><a href="/chat" class="{% if request.url.path == '/chat' %}active{% endif %}">Чат</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <div class="main-wrapper">
+            <header class="header">
+                <div class="user-info">
+                    <span class="username" id="navUsername">Loading...</span>
+                    <div class="avatar-placeholder">
+                        <img id="navAvatar" src="/static/img/default-avatar.png" alt="Avatar">
+                    </div>
+                    <button id="logoutBtn" style="margin-left: 15px; padding: 5px 10px; background: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer;">Выйти</button>
+                </div>
+            </header>
+
+            <main class="content">
+                {% block content %}
+                {% endblock %}
+            </main>
         </div>
     </div>
-</div>
 
-<!-- ИСПРАВЛЕННАЯ МОДАЛКА ИСТОРИИ -->
-<div class="modal-overlay" id="txHistoryModal">
-    <div class="modal modal-lg">
-        <div class="modal-header-etherscan">
-            <h4 id="txHistoryTitle">Список транзакций <b>ETH</b> кошелька <b>...</b></h4>
-            <button class="modal-close-etherscan" onclick="closeModal('txHistoryModal')">✕</button>
-        </div>
-        <div class="tx-table-container">
-            <table class="tx-table">
-                <thead>
-                    <tr>
-                        <th>Txn Hash</th>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>Value</th>
-                        <th style="color: #3498db;">Age</th>
-                        <th>Txn Fee</th>
-                        <th style="text-align: center;">Status</th>
-                    </tr>
-                </thead>
-                <tbody id="txTableBody">
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<div class="modal-overlay" id="txStatusModal">
-    <div class="modal" style="width: 450px; text-align: center;">
-        <div class="modal-header-etherscan" style="border-bottom: none; padding: 0;">
-            <div style="flex:1;"></div>
-            <button class="modal-close-etherscan" onclick="closeModal('txStatusModal')">✕</button>
-        </div>
-        <div style="padding: 10px;">
-            <div id="txStatusIcon" style="font-size: 50px; margin-bottom: 10px;">⏳</div>
-            <div id="txStatusText" style="font-size: 18px; font-weight: bold; margin-bottom: 20px; color: #f39c12;">Ожидание сети...</div>
-            <div id="txStatusLink" style="font-family: monospace; font-size: 14px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
-                <span style="color: #888;">Формирование хэша...</span>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-<script src="/static/js/wallets.js"></script>
-{% endblock %}
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
