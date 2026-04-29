@@ -181,11 +181,7 @@ class ProcessTransactionCallbackInteractor:
 
 
 class GetTransactionsInteractor:
-    """Use case for retrieving transaction history.
-
-    Merges confirmed transactions from Etherscan with local PENDING txs,
-    verifying live status via Web3 to eliminate Etherscan index delays.
-    """
+    """Use case for retrieving transaction history."""
 
     def __init__(  # noqa: PLR0913
         self,
@@ -203,6 +199,36 @@ class GetTransactionsInteractor:
         self.uow = uow
         self.worker_client = worker_client
         self.process_callback = process_callback
+
+    def _format_tx(self, tx: Transaction) -> dict[str, Any]:
+        """Format a local Transaction entity into a JSON-ready dictionary."""
+        return {
+            "hash": tx.tx_hash,
+            "from": tx.from_address,
+            "to": tx.to_address,
+            "value": str(int(tx.value * Decimal("1e18"))),
+            "timeStamp": str(int(tx.created_at.timestamp())),
+            "status": tx.status.value.lower(),
+            "tx_fee": str(tx.tx_fee),
+            "isError": "1" if tx.status == TransactionStatus.FAILED else "0",
+        }
+
+    async def _check_and_update_pending_tx(
+        self, tx: Transaction, pending_txs: list[dict[str, Any]]
+    ) -> None:
+        """Check live status of pending transactions and update the list."""
+        try:
+            live_status = await self.worker_client.check_tx_status(tx.tx_hash)
+            if live_status:
+                new_status_str = live_status.get("status", "FAILED").lower()
+                await self.process_callback(tx_id=tx.id, status=new_status_str)
+                tx.status = TransactionStatus(new_status_str.upper())
+                if "tx_fee" in live_status:
+                    tx.tx_fee = Decimal(live_status["tx_fee"])
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Error checking live status for %s: %s", tx.tx_hash, e)
+
+        pending_txs.append(self._format_tx(tx))
 
     async def __call__(
         self, user_id: uuid.UUID, wallet_id: uuid.UUID
@@ -227,36 +253,20 @@ class GetTransactionsInteractor:
         )
 
         confirmed_hashes = {tx["hash"].lower() for tx in etherscan_txs if "hash" in tx}
+        pending_txs: list[dict[str, Any]] = []
+        tasks = []
 
-        pending_txs = []
         for tx in local_txs:
             if tx.tx_hash.lower() in confirmed_hashes:
                 continue
 
             if tx.status == TransactionStatus.PENDING and tx.tx_hash.startswith("0x"):
-                live_status = await self.worker_client.check_tx_status(tx.tx_hash)
+                tasks.append(self._check_and_update_pending_tx(tx, pending_txs))
+            else:
+                pending_txs.append(self._format_tx(tx))
 
-                if live_status:
-                    new_status_str = live_status.get("status", "FAILED").lower()
-
-                    await self.process_callback(tx_id=tx.id, status=new_status_str)
-
-                    tx.status = TransactionStatus(new_status_str.upper())
-                    if "tx_fee" in live_status:
-                        tx.tx_fee = Decimal(live_status["tx_fee"])
-
-            pending_txs.append(
-                {
-                    "hash": tx.tx_hash,
-                    "from": tx.from_address,
-                    "to": tx.to_address,
-                    "value": str(int(tx.value * Decimal("1e18"))),
-                    "timeStamp": str(int(tx.created_at.timestamp())),
-                    "status": tx.status.value.lower(),
-                    "tx_fee": str(tx.tx_fee),
-                    "isError": "1" if tx.status == TransactionStatus.FAILED else "0",
-                }
-            )
+        if tasks:
+            await asyncio.gather(*tasks)
 
         return pending_txs + etherscan_txs
 

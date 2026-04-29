@@ -93,9 +93,9 @@ class EthereumWorkerClientImpl(EthereumWorkerClient):
         logger.info("RPC Request: eth.check_tx_status for %s", tx_hash)
         try:
             response = await self.broker.request(
-                {"tx_hash": tx_hash}, queue="eth.check_tx_status", timeout=15.0
+                {"tx_hash": tx_hash}, queue="eth.check_tx_status", timeout=3.0
             )
             return self._decode_message(response)
         except TimeoutError:
-            logger.exception("Worker timeout: couldn't check status for %s", tx_hash)
+            logger.warning("Worker timeout: couldn't check status for %s", tx_hash)
             return None
