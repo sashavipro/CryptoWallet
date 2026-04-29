@@ -1,4 +1,3 @@
-// Глобальные переменные
 let currentWallets =[];
 let currentOpenWalletId = null;
 let walletSocket = null;
@@ -11,9 +10,11 @@ function getCookie(name) {
     return matches ? decodeURIComponent(matches[1]) : undefined;
 }
 
-// Формат возраста в стиле Etherscan
+// ИСПРАВЛЕНИЕ: Высчитываем возраст (Age) транзакции
 function timeAgo(timestampSeconds) {
-    if (!timestampSeconds) return '---';
+    if (!timestampSeconds || timestampSeconds === "0" || timestampSeconds === 0) {
+        return '<span style="color:#f39c12">Pending...</span>';
+    }
     const seconds = Math.floor(Date.now() / 1000) - parseInt(timestampSeconds);
     if (seconds < 60) return `${Math.max(0, seconds)} secs ago`;
     const minutes = Math.floor(seconds / 60);
@@ -122,10 +123,6 @@ function initWalletSocket() {
         console.log("Успешно подключились к WS /transaction!");
     });
 
-    walletSocket.on("connect_error", (err) => {
-        console.error("Ошибка WS /transaction:", err.message);
-    });
-
     walletSocket.on("transaction_status_changed", (data) => {
         if (currentOpenWalletId && (String(currentOpenWalletId) === String(data.wallet_id) || !data.wallet_id)) {
             fetchAndUpdateTxs(currentOpenWalletId);
@@ -163,10 +160,7 @@ function initWalletSocket() {
         if (status === 'success' || status === '1') {
             showGlobalAlert(`Транзакция ${hashDisplay} успешно завершена!`);
         } else if (status === 'failed' || status === '0') {
-            const errorReason = data.error ? `: ${data.error}` : '';
-            showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой${errorReason}`, true);
-        } else if (status === 'pending') {
-            showGlobalAlert(`Транзакция отправлена в сеть. Ожидаем майнинга...`, false, true);
+            showGlobalAlert(`Транзакция ${hashDisplay} завершилась ошибкой`, true);
         }
     });
 
@@ -245,11 +239,6 @@ window.requestFaucet = async (walletId) => {
 
     try {
         const res = await fetch(`/api/v1/faucet/${walletId}/request-eth`, { method: 'POST' });
-        const contentType = res.headers.get("content-type");
-        let data = null;
-        if (contentType && contentType.includes("application/json")) {
-            data = await res.json();
-        }
 
         if (res.ok) {
             showGlobalAlert('ETH успешно запрошен! Ожидайте подтверждения сети.');
@@ -261,15 +250,10 @@ window.requestFaucet = async (walletId) => {
             document.getElementById('txStatusLink').innerHTML = '<span style="color: #888;">Формирование хэша...</span>';
             document.getElementById('txStatusModal').style.display = 'flex';
             window.waitingForWalletTx = walletId;
-
         } else {
-            let errorMsg = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Ошибка сервера (Код ${res.status})`;
-
-            if (errorMsg.includes('через') || errorMsg.includes('доступен')) {
-                showGlobalAlert(` ${errorMsg}`, false, true);
-            } else {
-                showGlobalAlert(`Ошибка Faucet: ${errorMsg}`, true);
-            }
+            const data = await res.json();
+            let errorMsg = data && data.detail ? (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)) : `Ошибка сервера`;
+            showGlobalAlert(`Ошибка: ${errorMsg}`, true);
         }
     } catch (e) {
         showGlobalAlert('Сбой сети или сервер не отвечает при запросе Faucet', true);
@@ -278,7 +262,6 @@ window.requestFaucet = async (walletId) => {
 
 window.openTxHistory = (walletId, address) => {
     currentOpenWalletId = walletId;
-    // Обновляем заголовок как в макете
     document.getElementById('txHistoryTitle').innerHTML = `Список транзакций <b>ETH</b> кошелька <b>${address}</b>`;
     const tbody = document.getElementById('txTableBody');
 
@@ -324,23 +307,20 @@ function fetchAndUpdateTxs(walletId) {
             const isError = tx.isError === "1" || tx.txreceipt_status === "0" || rawStatus === "failed" || rawStatus === "error";
             const isSuccess = tx.txreceipt_status === "1" || rawStatus === "success" || (tx.blockNumber && parseInt(tx.blockNumber) > 0 && !isError);
 
-            // Стили статуса точно по макету
-            let statusHtml = '<span style="color: #f39c12; font-size: 15px;">Pending</span>';
+            let statusHtml = '<span style="color: #f39c12; font-weight: bold;">Pending</span>';
             let statusCode = 'pending';
             if (isSuccess) {
-                statusHtml = '<span style="color: #27ae60; font-size: 15px;">Success</span>';
+                statusHtml = '<span style="color: #27ae60; font-weight: bold;">Success</span>';
                 statusCode = 'success';
             } else if (isError) {
-                statusHtml = '<span style="color: #e74c3c; font-size: 15px;">Failed</span>';
+                statusHtml = '<span style="color: #e74c3c; font-weight: bold;">Failed</span>';
                 statusCode = 'failed';
             }
 
-            // Сумма (убираем лишние нули)
             let valNum = parseFloat(tx.value || 0);
             if (valNum > 1000000000) valNum = valNum / 1e18;
-            const valEth = Number(valNum.toFixed(15)).toString();
+            const valEth = Number(valNum.toFixed(15)).toString() + " ETH";
 
-            // Функция обрезки адресов для ссылок
             const formatAddr = (addr) => {
                 if (!addr || addr === '---') return '---';
                 return addr.substring(0, 18) + '...';
@@ -349,6 +329,7 @@ function fetchAndUpdateTxs(walletId) {
             const fromAddr = tx.from || tx.from_address || '---';
             const toAddr = tx.to || tx.to_address || '---';
 
+            // ИСПРАВЛЕНИЕ: Делаем адреса синими ссылками
             const fromDisplay = fromAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${fromAddr}" target="_blank" class="tx-link" title="${fromAddr}">${formatAddr(fromAddr)}</a>` : '---';
             const toDisplay = toAddr !== '---' ? `<a href="https://sepolia.etherscan.io/address/${toAddr}" target="_blank" class="tx-link" title="${toAddr}">${formatAddr(toAddr)}</a>` : '---';
 
@@ -356,23 +337,24 @@ function fetchAndUpdateTxs(walletId) {
             if (txHash.startsWith('0x')) {
                 hashDisplay = `<a href="https://sepolia.etherscan.io/tx/${txHash}" target="_blank" class="tx-link" title="Посмотреть в Etherscan">${formatAddr(txHash)}</a>`;
             } else {
-                hashDisplay = `<span style="color: #888;" title="Ожидание формирования хэша сети">Ожидание...</span>`;
+                hashDisplay = `<span style="color: #888; font-family: monospace;">Pending...</span>`;
             }
 
-            // Комиссия и лампочка
             const txFee = tx.tx_fee ? Number(parseFloat(tx.tx_fee).toFixed(8)).toString() : '0';
+
+            // ИСПРАВЛЕНИЕ: Вычисляем время
             const ageStr = timeAgo(tx.timeStamp);
 
-            // HTML строки
+            // ИСПРАВЛЕНИЕ: Точный порядок из 7 колонок, выравнивание по правому краю
             newHtml += `
                 <tr id="tx-row-${safeHashId}">
                     <td>${hashDisplay}</td>
                     <td>${fromDisplay}</td>
                     <td>${toDisplay}</td>
-                    <td>${valEth} Ether</td>
+                    <td><strong>${valEth}</strong></td>
                     <td style="color: #3498db;">${ageStr}</td>
-                    <td>${txFee} <span style="color: #27ae60; font-size: 12px;" title="Txn Fee">💡</span></td>
-                    <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: center;">${statusHtml}</td>
+                    <td style="text-align: right; color: #555;">${txFee}</td>
+                    <td id="tx-status-${safeHashId}" data-status="${statusCode}" style="text-align: right;">${statusHtml}</td>
                 </tr>
             `;
         });

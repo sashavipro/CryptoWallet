@@ -139,7 +139,6 @@
     </div>
 </div>
 
-<!-- ИСПРАВЛЕННАЯ МОДАЛКА ИСТОРИИ -->
 <div class="modal-overlay" id="txHistoryModal">
     <div class="modal modal-lg">
         <div class="modal-header-etherscan">
@@ -155,8 +154,9 @@
                         <th>To</th>
                         <th>Value</th>
                         <th style="color: #3498db;">Age</th>
-                        <th>Txn Fee</th>
-                        <th style="text-align: center;">Status</th>
+                        <!-- ИСПРАВЛЕНИЕ: Смещаем вправо -->
+                        <th style="text-align: right;">Txn Fee</th>
+                        <th style="text-align: right;">Status</th>
                     </tr>
                 </thead>
                 <tbody id="txTableBody">
